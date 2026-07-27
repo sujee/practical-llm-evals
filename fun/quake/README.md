@@ -29,7 +29,7 @@ Here is a really cool playable version created by Kimi K3
 
 [Play live!](https://sujee.github.io/practical-llm-evals/fun/quake/opencode-kimi-k3/index.html)
 
-[![Play](./opencode-kimi-k3/images/quake-1.png)](https://sujee.github.io/practical-llm-evals/fun/quake/opencode-kimi-k3/index.html)
+<a href="https://sujee.github.io/practical-llm-evals/fun/quake/opencode-kimi-k3/index.html"><img src="./opencode-kimi-k3/images/quake-1.png" alt="Play" width="200"></a>
 
 ▶️ [Watch on YouTube](https://www.youtube.com/watch?v=6IzVFtnOm9A)
 
