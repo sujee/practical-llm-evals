@@ -19,7 +19,7 @@ do you need any clarifications?
 
 I used various coding agents + models
 
-Agents:
+Coding agents:
 - Claude Code
 - OpenCode
 
@@ -27,10 +27,8 @@ Agents:
 
 Here is a really cool playable version created by Kimi K3
 
-Play live!
 
-
-[![Watch the demo](https://img.youtube.com/vi/6IzVFtnOm9A/maxresdefault.jpg)](https://www.youtube.com/watch?v=6IzVFtnOm9A)
+[![Play](./opencode-kimi-k3/images/quake-1.png)](https://sujee.github.io/practical-llm-evals/fun/quake/opencode-kimi-k3/index.html)
 
 ▶️ [Watch on YouTube](https://www.youtube.com/watch?v=6IzVFtnOm9A)
 
