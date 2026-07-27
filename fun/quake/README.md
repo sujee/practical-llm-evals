@@ -23,10 +23,11 @@ Coding agents:
 - Claude Code
 - OpenCode
 
-## Model: Kimi K3
+## Game  1: OpenCode + Kimi K3
 
 Here is a really cool playable version created by Kimi K3
 
+[Play live!](https://sujee.github.io/practical-llm-evals/fun/quake/opencode-kimi-k3/index.html)
 
 [![Play](./opencode-kimi-k3/images/quake-1.png)](https://sujee.github.io/practical-llm-evals/fun/quake/opencode-kimi-k3/index.html)
 
