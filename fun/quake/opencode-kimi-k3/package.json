@@ -1,0 +1,11 @@
+{
+  "name": "quake-browser-edition",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "A Quake homage playable in the browser. Serve statically, e.g.: python3 -m http.server",
+  "devDependencies": {
+    "puppeteer-core": "^25.4.0",
+    "three": "^0.152.2"
+  }
+}

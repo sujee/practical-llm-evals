@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>QUAKE — Browser Edition</title>
+<style>
+  :root {
+    --tan: #d8c8a0;
+    --brown: #2a1f14;
+    --panel: #1c130c;
+    --red: #c03020;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: #000; }
+  body { font-family: 'Courier New', monospace; user-select: none; }
+  #game {
+    position: fixed; inset: 0; width: 100vw; height: 100vh;
+    image-rendering: pixelated; display: block; cursor: crosshair;
+  }
+  #damage-flash {
+    position: fixed; inset: 0; background: radial-gradient(ellipse, rgba(180,10,0,0.55), rgba(120,0,0,0.8));
+    opacity: 0; pointer-events: none; z-index: 5;
+  }
+  #crosshair {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    color: #c8ffb0; font-size: 18px; font-weight: bold; opacity: 0.85;
+    z-index: 6; pointer-events: none; display: none; text-shadow: 0 0 2px #000;
+  }
+  #crosshair.visible { display: block; }
+
+  /* ---- status bar ---- */
+  #hud {
+    position: fixed; left: 50%; bottom: 0; transform: translateX(-50%);
+    display: none; align-items: stretch; gap: 18px; z-index: 6;
+    background: linear-gradient(#3a2c1c, #241a10 30%, #17100a);
+    border-top: 3px solid #4a3a26; padding: 8px 22px 10px;
+    box-shadow: 0 -4px 18px rgba(0,0,0,0.8);
+  }
+  #hud.visible { display: flex; }
+  #hud .stat { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 90px; }
+  #hud label { font-size: 10px; letter-spacing: 2px; color: #8a7a5a; font-weight: bold; }
+  #hud .num, #hud span { font-size: 32px; font-weight: bold; color: var(--tan); text-shadow: 2px 2px 0 #000; line-height: 1; }
+  #hud span.low { color: #e04028; animation: blink 0.8s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0.55; } }
+  #hud-face {
+    width: 56px; height: 56px; align-self: center;
+    image-rendering: pixelated; border: 3px solid #4a3a26; background: #0c0805;
+  }
+  #hud-key { visibility: hidden; color: #d8b830; font-size: 12px; letter-spacing: 1px; font-weight: bold; }
+
+  /* ---- center messages ---- */
+  #message, #message-sub {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    text-align: center; z-index: 6; pointer-events: none;
+    opacity: 0; transition: opacity 0.25s;
+  }
+  #message { top: 30%; font-size: 26px; color: #e8d8b0; text-shadow: 2px 2px 0 #000; letter-spacing: 1px; font-weight: bold; }
+  #message-sub { top: calc(30% + 34px); font-size: 14px; color: #9a8a6a; text-shadow: 1px 1px 0 #000; letter-spacing: 3px; }
+  #message.visible, #message.visible + #message-sub, #message-sub.visible { opacity: 1; }
+
+  /* ---- overlay screens ---- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 10; display: none;
+    align-items: center; justify-content: center; flex-direction: column;
+    background: rgba(8, 5, 3, 0.82); cursor: pointer; text-align: center;
+  }
+  .overlay.visible { display: flex; }
+  .overlay h1 {
+    font-size: 84px; letter-spacing: 12px; color: #6a5030;
+    text-shadow: 0 0 2px #c8a060, 4px 4px 0 #000, 0 0 30px rgba(200,120,40,0.25);
+    font-weight: bold;
+  }
+  .overlay h1.red { color: #8a1810; text-shadow: 0 0 2px #e04030, 4px 4px 0 #000; }
+  .overlay h2 { color: var(--tan); font-size: 20px; letter-spacing: 6px; margin-top: 8px; }
+  .overlay .go {
+    margin-top: 40px; font-size: 20px; color: #e8d8b0; letter-spacing: 3px;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse { 50% { opacity: 0.35; } }
+  .overlay .controls { margin-top: 28px; color: #7a6a50; font-size: 13px; line-height: 1.9; letter-spacing: 1px; }
+  .overlay .controls b { color: #b09a70; }
+  .overlay table { margin-top: 30px; color: var(--tan); font-size: 18px; border-spacing: 24px 6px; }
+  .overlay table td:first-child { color: #8a7a5a; letter-spacing: 2px; text-align: right; }
+  .overlay table td:last-child { font-weight: bold; text-align: left; }
+</style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="damage-flash"></div>
+  <div id="crosshair">+</div>
+
+  <div id="message"></div>
+  <div id="message-sub"></div>
+
+  <div id="hud">
+    <div class="stat"><label>ARMOR</label><span id="hud-armor">0</span></div>
+    <div class="stat"><label id="hud-key">GOLD KEY</label><canvas id="hud-face" width="40" height="40"></canvas></div>
+    <div class="stat"><label>HEALTH</label><span id="hud-health">100</span></div>
+    <div class="stat"><label id="hud-weapon">SHOTGUN</label><span id="hud-ammo">25</span></div>
+  </div>
+
+  <div class="overlay visible" id="menu">
+    <h1>QUAKE</h1>
+    <h2>BROWSER EDITION &mdash; THE SLIPGATE COMPLEX</h2>
+    <div class="go">CLICK TO START</div>
+    <div class="controls">
+      <b>WASD</b> move &nbsp; <b>MOUSE</b> look &nbsp; <b>LMB</b> fire &nbsp; <b>SPACE</b> jump<br>
+      <b>1 / 2</b> weapons &nbsp; <b>M</b> mute &nbsp; &mdash; &nbsp; sound on for full experience
+    </div>
+  </div>
+
+  <div class="overlay" id="pause">
+    <h2>PAUSED</h2>
+    <div class="go">CLICK TO RESUME</div>
+  </div>
+
+  <div class="overlay" id="death">
+    <h1 class="red">YOU DIED</h1>
+    <div class="go">CLICK TO RESTART</div>
+  </div>
+
+  <div class="overlay" id="complete">
+    <h1>LEVEL COMPLETE</h1>
+    <table>
+      <tr><td>TIME</td><td id="stat-time">0:00</td></tr>
+      <tr><td>KILLS</td><td id="stat-kills">0 / 0</td></tr>
+      <tr><td>SECRETS</td><td id="stat-secrets">0 / 1</td></tr>
+    </table>
+    <div class="go">CLICK TO PLAY AGAIN</div>
+  </div>
+
+  <div class="overlay" id="boot-error">
+    <h1 class="red" style="font-size:44px">CAN'T START</h1>
+    <div class="controls" id="boot-error-msg" style="max-width:620px;text-align:left;line-height:2"></div>
+  </div>
+
+  <script>
+    // Classic (non-module) script so it runs even when ES modules are blocked.
+    setTimeout(function () {
+      if (window.__game) return;
+      var msg;
+      if (location.protocol === 'file:') {
+        msg = 'This game uses ES modules, which browsers block when opened ' +
+          'directly as a file.<br><br>Serve the folder over HTTP instead:' +
+          '<br><br><b>cd</b> to the game folder, then run:' +
+          '<br>&nbsp;&nbsp;<b>python3 -m http.server 8123</b>' +
+          '<br>and open <b>http://localhost:8123</b>';
+      } else {
+        msg = 'The game scripts failed to load. Your browser may be too old ' +
+          '(ES modules + import maps required), or a file failed to download. ' +
+          'Check the browser console for details.';
+      }
+      document.getElementById('boot-error-msg').innerHTML = msg;
+      document.getElementById('boot-error').classList.add('visible');
+      document.getElementById('menu').classList.remove('visible');
+    }, 1800);
+  </script>
+
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three.module.js" } }
+  </script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
