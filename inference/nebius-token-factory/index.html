@@ -49,6 +49,22 @@
   #btn-theme.active { background: var(--text); color: var(--bg); border-color: var(--text); }
   h1 { font-size: 1.5rem; margin: 8px 0 4px; }
   h2 { font-size: 1.1rem; margin: 20px 0 4px; }
+  h2[id] { scroll-margin-top: 16px; }
+  .toc {
+    margin: 14px 0 4px;
+    padding: 12px 16px;
+    font-size: 1.05rem;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .toc .toc-label { font-weight: 600; margin-right: 12px; }
+  .toc a { color: var(--link); font-weight: 600; text-decoration: none; padding: 2px 4px; }
+  .toc a:hover { text-decoration: underline; }
+  .toc .sep { color: var(--faint); margin: 0 12px; }
   .provider-link { margin: 0; font-size: 0.9rem; }
   .provider-link a { color: var(--link); text-decoration: none; }
   .provider-link a:hover { text-decoration: underline; }
@@ -68,7 +84,7 @@
   .controls label { font-size: 0.85rem; color: var(--muted); display: flex; align-items: center; gap: 6px; }
   .controls input[type="range"] { width: 140px; cursor: pointer; accent-color: var(--text); }
   .controls .slider-val { min-width: 2ch; font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
-  #chart {
+  #chart, #chart2 {
     width: 100%;
     height: clamp(380px, 62vh, 680px);
     background: var(--card);
@@ -85,6 +101,9 @@
     font-size: 0.9rem;
   }
   #error code { background: var(--error-code-bg); padding: 1px 5px; border-radius: 4px; }
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; } /* smooth jumps for the section links */
+  }
 </style>
 </head>
 <body>
@@ -93,7 +112,11 @@
   <h1>Nebius Token Factory Models</h1>
   <p class="provider-link"><a href="https://tokenfactory.nebius.com/" target="_blank" rel="noopener">https://tokenfactory.nebius.com/</a></p>
   <p class="data-link">Data: <a href="model-info.json" target="_blank" rel="noopener"><code>model-info.json</code></a> (updated <span id="updated-at"></span>)</p>
-  <h2>Intelligence and Pricing</h2>
+  <nav class="toc">
+    <span class="toc-label">Jump to:</span>
+    <a href="#pricing">Intelligence and Pricing</a><span class="sep">|</span><a href="#release">Release Time</a>
+  </nav>
+  <h2 id="pricing">Intelligence and Pricing</h2>
   <p class="subtitle">AA Intelligence Index vs price ($ per 1M tokens). Blended pricing = 0.75 &times; input + 0.25 &times; output (3:1 mix). Bubble area is proportional to parameter count. Hover a point for full model details. Click legend entries to show/hide model families.</p>
   <div class="controls">
     <label>X axis:
@@ -116,6 +139,14 @@
     then visit <code>http://localhost:8000/inference/nebius-token-factory/</code>.
   </div>
   <div id="chart"></div>
+
+  <h2 id="release">Release Time</h2>
+  <p class="subtitle">AA Intelligence Index vs model release date. Bubble area is proportional to parameter count. Hover a point for full model details. Click legend entries to show/hide model families.</p>
+  <div class="controls">
+    <button id="btn-labels2" class="active">Labels: ON</button>
+    <button id="btn-bubbles2" class="active">Size &prop; params: ON</button>
+  </div>
+  <div id="chart2"></div>
 </main>
 
 <script>
@@ -154,19 +185,38 @@
 
   // Theme comes from the inline head script (localStorage or prefers-color-scheme)
   let theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
-  let chart;
+  let chart, chart2;
 
-  function initChart() {
+  function initCharts() {
     if (chart) chart.dispose();
+    if (chart2) chart2.dispose();
     // ECharts' built-in 'dark' theme re-themes axes, legend and tooltip automatically
     chart = echarts.init(document.getElementById('chart'), theme === 'dark' ? 'dark' : null);
     chart.setOption(buildOption());
+    chart2 = echarts.init(document.getElementById('chart2'), theme === 'dark' ? 'dark' : null);
+    chart2.setOption(buildOptionRelease());
   }
 
   let priceMetric = 'pricing_blended_1m';
   let minIntel = 40;
   let showLabels = true;
   let sizeByParams = true;
+  let showLabels2 = true;
+  let sizeByParams2 = true;
+
+  // Shared tooltip for both charts
+  function tooltipFormatter(p) {
+    const m = p.data.model;
+    return [
+      `<b>${m.model_id}</b>`,
+      `AA intelligence index: <b>${m.aa_intelligence_index}</b>`,
+      `Pricing (1M blended): <b>${fmtPrice(m.pricing_blended_1m)}</b>`,
+      `Pricing (1M input): <b>${fmtPrice(m.price_input_1m)}</b>`,
+      `Pricing (1M output): <b>${fmtPrice(m.price_output_1m)}</b>`,
+      `Parameters: <b>${m.param_count}B</b>`,
+      `Released: <b>${m.model_release_date}</b>`
+    ].join('<br>');
+  }
 
   function buildSeries() {
     return orgs.map(org => ({
@@ -195,21 +245,7 @@
       backgroundColor: 'transparent', // let the CSS card color show through in both themes
       grid: { left: 70, right: 110, top: 60, bottom: 60 },
       legend: { top: 12, type: 'scroll' },
-      tooltip: {
-        trigger: 'item',
-        formatter: p => {
-          const m = p.data.model;
-          return [
-            `<b>${m.model_id}</b>`,
-            `AA intelligence index: <b>${m.aa_intelligence_index}</b>`,
-            `Pricing (1M blended): <b>${fmtPrice(m.pricing_blended_1m)}</b>`,
-            `Pricing (1M input): <b>${fmtPrice(m.price_input_1m)}</b>`,
-            `Pricing (1M output): <b>${fmtPrice(m.price_output_1m)}</b>`,
-            `Parameters: <b>${m.param_count}B</b>`,
-            `Released: <b>${m.model_release_date}</b>`
-          ].join('<br>');
-        }
-      },
+      tooltip: { trigger: 'item', formatter: tooltipFormatter },
       xAxis: {
         type: 'value',
         name: METRICS[priceMetric],
@@ -229,13 +265,71 @@
     };
   }
 
-  initChart();
+  // Parse 'YYYY-MM-DD' as a LOCAL timestamp so time-axis tick labels don't shift by a day in US timezones
+  const parseDate = s => { const [y, mo, d] = s.split('-').map(Number); return new Date(y, mo - 1, d).getTime(); };
+  const DAY = 86400000;
+  const releaseTimes = models.map(m => parseDate(m.model_release_date));
+  const timeMin = Math.min(...releaseTimes) - 7 * DAY; // pad so edge bubbles aren't clipped
+  const timeMax = Math.max(...releaseTimes) + 7 * DAY;
+
+  // Release-time chart: one series per org, no intelligence filter
+  function buildSeriesRelease() {
+    return orgs.map(org => ({
+      name: org,
+      type: 'scatter',
+      symbolSize: sizeByParams2 ? (val, p) => bubbleSize(p.data.model.param_count) : 16,
+      emphasis: { focus: 'series', scale: 1.4 },
+      labelLayout: { hideOverlap: true },
+      label: {
+        show: showLabels2,
+        position: 'right',
+        fontSize: 11,
+        color: theme === 'dark' ? '#8b94a3' : '#666',
+        formatter: p => p.data.model.short
+      },
+      data: models.filter(m => m.model_id.startsWith(org + '/')).map(m => ({
+        value: [parseDate(m.model_release_date), m.aa_intelligence_index],
+        model: m
+      }))
+    }));
+  }
+
+  function buildOptionRelease() {
+    return {
+      animationDuration: 400,
+      backgroundColor: 'transparent',
+      grid: { left: 70, right: 110, top: 60, bottom: 60 },
+      legend: { top: 12, type: 'scroll' },
+      tooltip: { trigger: 'item', formatter: tooltipFormatter },
+      xAxis: {
+        type: 'time',
+        name: 'Release date',
+        nameLocation: 'middle',
+        nameGap: 34,
+        min: timeMin,
+        max: timeMax,
+        splitLine: { lineStyle: { type: 'dashed' } }
+      },
+      yAxis: {
+        type: 'value',
+        name: 'AA Intelligence Index\n(higher is better)',
+        nameLocation: 'middle',
+        nameGap: 44,
+        splitLine: { lineStyle: { type: 'dashed' } }
+      },
+      series: buildSeriesRelease()
+    };
+  }
+
+  initCharts();
 
   const selMetric = document.getElementById('sel-metric');
   const sliderIntel = document.getElementById('slider-intel');
   const intelVal = document.getElementById('intel-val');
   const btnLabels = document.getElementById('btn-labels');
   const btnBubbles = document.getElementById('btn-bubbles');
+  const btnLabels2 = document.getElementById('btn-labels2');
+  const btnBubbles2 = document.getElementById('btn-bubbles2');
   const btnTheme = document.getElementById('btn-theme');
 
   function renderThemeBtn() {
@@ -249,7 +343,14 @@
     document.documentElement.dataset.theme = theme;
     localStorage.setItem('tf-theme', theme);
     renderThemeBtn();
-    initChart();
+    initCharts();
+  });
+
+  btnBubbles2.addEventListener('click', () => {
+    sizeByParams2 = !sizeByParams2;
+    btnBubbles2.innerHTML = 'Size &prop; params: ' + (sizeByParams2 ? 'ON' : 'OFF');
+    btnBubbles2.classList.toggle('active', sizeByParams2);
+    chart2.setOption(buildOptionRelease());
   });
 
   btnBubbles.addEventListener('click', () => {
@@ -282,7 +383,17 @@
     chart.setOption(buildOption());
   });
 
-  window.addEventListener('resize', () => chart && chart.resize());
+  btnLabels2.addEventListener('click', () => {
+    showLabels2 = !showLabels2;
+    btnLabels2.textContent = 'Labels: ' + (showLabels2 ? 'ON' : 'OFF');
+    btnLabels2.classList.toggle('active', showLabels2);
+    chart2.setOption(buildOptionRelease());
+  });
+
+  window.addEventListener('resize', () => {
+    chart && chart.resize();
+    chart2 && chart2.resize();
+  });
 })();
 </script>
 </body>
