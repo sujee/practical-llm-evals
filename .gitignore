@@ -1,0 +1,8 @@
+# Ignore archived directories anywhere in the repo
+archived/
+
+# Ignore tmp directories
+tmp/
+
+# Ignore .out files
+*.out
