@@ -1,4 +1,4 @@
-# Fun Benhcmarks and Projects
+# Fun Benchmarks and Projects
 
 A collection of fun mini-projects built with AI coding agents and models.
 
