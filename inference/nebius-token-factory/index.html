@@ -5,57 +5,91 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nebius Token Factory Models</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script>
+  // Apply saved/preferred theme before first paint to avoid a light-flash in dark mode
+  document.documentElement.dataset.theme =
+    localStorage.getItem('tf-theme') ||
+    (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+</script>
 <style>
-  :root { color-scheme: light; }
+  :root {
+    color-scheme: light;
+    --bg: #f7f8fa; --text: #1a1a2e; --card: #fff;
+    --card-border: #e3e5e9; --control-border: #c9cdd4;
+    --muted: #555; --faint: #888; --link: #4a6cf7;
+    --error-bg: #fff8e1; --error-border: #e0a800; --error-code-bg: #f0ead2;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #14161c; --text: #e7e9ee; --card: #1d212b;
+    --card-border: #2c313d; --control-border: #3a4152;
+    --muted: #9aa3b2; --faint: #7d8590; --link: #7ea0ff;
+    --error-bg: #3a2f10; --error-border: #b8860b; --error-code-bg: #4a3f1a;
+  }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    background: #f7f8fa;
-    color: #1a1a2e;
+    background: var(--bg);
+    color: var(--text);
   }
-  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 40px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 40px; position: relative; }
+  #btn-theme {
+    position: absolute;
+    top: 24px;
+    right: 16px;
+    padding: 6px 14px;
+    font-size: 0.85rem;
+    border: 1px solid var(--control-border);
+    border-radius: 6px;
+    background: var(--card);
+    color: var(--text);
+    cursor: pointer;
+  }
+  #btn-theme.active { background: var(--text); color: var(--bg); border-color: var(--text); }
   h1 { font-size: 1.5rem; margin: 8px 0 4px; }
-  h2 { font-size: 1.1rem; margin: 20px 0 4px; color: #333; }
+  h2 { font-size: 1.1rem; margin: 20px 0 4px; }
   .provider-link { margin: 0; font-size: 0.9rem; }
-  .provider-link a { color: #4a6cf7; text-decoration: none; }
+  .provider-link a { color: var(--link); text-decoration: none; }
   .provider-link a:hover { text-decoration: underline; }
-  .data-link { margin: 4px 0 0; color: #888; font-size: 0.8rem; }
-  .subtitle { margin: 0 0 16px; color: #555; font-size: 0.95rem; }
+  .data-link { margin: 4px 0 0; color: var(--faint); font-size: 0.8rem; }
+  .subtitle { margin: 0 0 16px; color: var(--muted); font-size: 0.95rem; }
   .controls { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
   .controls button, .controls select {
     padding: 6px 14px;
     font-size: 0.85rem;
-    border: 1px solid #c9cdd4;
+    border: 1px solid var(--control-border);
     border-radius: 6px;
-    background: #fff;
+    background: var(--card);
+    color: var(--text);
     cursor: pointer;
   }
-  .controls button.active { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
-  .controls label { font-size: 0.85rem; color: #555; display: flex; align-items: center; gap: 6px; }
-  .controls input[type="range"] { width: 140px; cursor: pointer; accent-color: #1a1a2e; }
-  .controls .slider-val { min-width: 2ch; font-variant-numeric: tabular-nums; color: #1a1a2e; font-weight: 600; }
+  .controls button.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .controls label { font-size: 0.85rem; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .controls input[type="range"] { width: 140px; cursor: pointer; accent-color: var(--text); }
+  .controls .slider-val { min-width: 2ch; font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
   #chart {
     width: 100%;
     height: clamp(380px, 62vh, 680px);
-    background: #fff;
-    border: 1px solid #e3e5e9;
+    background: var(--card);
+    border: 1px solid var(--card-border);
     border-radius: 10px;
   }
   #error {
     display: none;
     margin: 16px 0;
     padding: 12px 16px;
-    border: 1px solid #e0a800;
-    background: #fff8e1;
+    border: 1px solid var(--error-border);
+    background: var(--error-bg);
     border-radius: 8px;
     font-size: 0.9rem;
   }
-  #error code { background: #f0ead2; padding: 1px 5px; border-radius: 4px; }
+  #error code { background: var(--error-code-bg); padding: 1px 5px; border-radius: 4px; }
 </style>
 </head>
 <body>
 <main>
+  <button id="btn-theme">Theme: Light</button>
   <h1>Nebius Token Factory Models</h1>
   <p class="provider-link"><a href="https://tokenfactory.nebius.com/" target="_blank" rel="noopener">https://tokenfactory.nebius.com/</a></p>
   <p class="data-link">Data: <a href="model-info.json" target="_blank" rel="noopener"><code>model-info.json</code></a> (updated <span id="updated-at"></span>)</p>
@@ -69,7 +103,7 @@
         <option value="price_output_1m">Pricing output (1M)</option>
       </select>
     </label>
-    <label>Intelligence &ge;
+    <label>Y axis: intelligence &ge;
       <input type="range" id="slider-intel" step="1" value="40">
       <span class="slider-val" id="intel-val">40</span>
     </label>
@@ -118,7 +152,16 @@
     price_output_1m: 'Pricing output (1M)'
   };
 
-  const chart = echarts.init(document.getElementById('chart'));
+  // Theme comes from the inline head script (localStorage or prefers-color-scheme)
+  let theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+  let chart;
+
+  function initChart() {
+    if (chart) chart.dispose();
+    // ECharts' built-in 'dark' theme re-themes axes, legend and tooltip automatically
+    chart = echarts.init(document.getElementById('chart'), theme === 'dark' ? 'dark' : null);
+    chart.setOption(buildOption());
+  }
 
   let priceMetric = 'pricing_blended_1m';
   let minIntel = 40;
@@ -136,7 +179,7 @@
         show: showLabels,
         position: 'right',
         fontSize: 11,
-        color: '#666',
+        color: theme === 'dark' ? '#8b94a3' : '#666',
         formatter: p => p.data.model.short
       },
       data: models.filter(m => m.model_id.startsWith(org + '/') && m.aa_intelligence_index >= minIntel).map(m => ({
@@ -149,6 +192,7 @@
   function buildOption() {
     return {
       animationDuration: 400,
+      backgroundColor: 'transparent', // let the CSS card color show through in both themes
       grid: { left: 70, right: 110, top: 60, bottom: 60 },
       legend: { top: 12, type: 'scroll' },
       tooltip: {
@@ -185,13 +229,28 @@
     };
   }
 
-  chart.setOption(buildOption());
+  initChart();
 
   const selMetric = document.getElementById('sel-metric');
   const sliderIntel = document.getElementById('slider-intel');
   const intelVal = document.getElementById('intel-val');
   const btnLabels = document.getElementById('btn-labels');
   const btnBubbles = document.getElementById('btn-bubbles');
+  const btnTheme = document.getElementById('btn-theme');
+
+  function renderThemeBtn() {
+    btnTheme.textContent = 'Theme: ' + (theme === 'dark' ? 'Dark' : 'Light');
+    btnTheme.classList.toggle('active', theme === 'dark');
+  }
+  renderThemeBtn();
+
+  btnTheme.addEventListener('click', () => {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('tf-theme', theme);
+    renderThemeBtn();
+    initChart();
+  });
 
   btnBubbles.addEventListener('click', () => {
     sizeByParams = !sizeByParams;
@@ -223,7 +282,7 @@
     chart.setOption(buildOption());
   });
 
-  window.addEventListener('resize', () => chart.resize());
+  window.addEventListener('resize', () => chart && chart.resize());
 })();
 </script>
 </body>
