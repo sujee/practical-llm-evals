@@ -1,0 +1,29 @@
+# Nebius Token Factory Models
+
+Some visualizations for Token Factory models.
+
+## 📊 Visualizations!
+
+[All visualizations — view live!](https://sujee.github.io/practical-llm-evals/inference/nebius-token-factory/)
+
+- 📈 [Intelligence and Pricing](https://sujee.github.io/practical-llm-evals/inference/nebius-token-factory/#pricing) — AA Intelligence Index vs price 
+- 📅 [Release Time line](https://sujee.github.io/practical-llm-evals/inference/nebius-token-factory/#release) — AA Intelligence Index vs model release date
+
+## Getting Model Info
+
+[Latest models list](tf-models-list.json)
+
+Use `verbose` flag to get all details. See below.
+
+```bash
+export NEBIUS_API_KEY='api key goes here'
+
+curl --request GET \
+  --url https://api.tokenfactory.nebius.com/v1/models?verbose=true \
+  --header "Authorization: Bearer $NEBIUS_API_KEY"
+  
+# format better
+curl --request GET \
+  --url https://api.tokenfactory.nebius.com/v1/models?verbose=true \
+  --header "Authorization: Bearer $NEBIUS_API_KEY" | jq
+```
