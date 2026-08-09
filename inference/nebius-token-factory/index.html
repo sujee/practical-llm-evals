@@ -173,8 +173,9 @@
 
   const fmtPrice = v => '$' + (v < 1 ? v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '') : v.toFixed(2));
 
-  // Bubble area proportional to param count (size ~ sqrt), clamped to stay readable
-  const bubbleSize = params => Math.min(6 + Math.sqrt(params) * 0.6, 42);
+  // Bubble area proportional to param count (size ~ sqrt), wide scaling so big models stand out
+  // e.g. 30B -> ~14px, 1000B -> ~66px, 2800B (Kimi-K3) -> ~109px
+  const bubbleSize = params => Math.min(3 + Math.sqrt(params) * 2, 120);
 
   // X-axis price metrics selectable via dropdown
   const METRICS = {
@@ -222,8 +223,10 @@
     return orgs.map(org => ({
       name: org,
       type: 'scatter',
+      clip: false, // big bubbles near the edge should not be cut off
       symbolSize: sizeByParams ? (val, p) => bubbleSize(p.data.model.param_count) : 16,
-      emphasis: { focus: 'series', scale: 1.4 },
+      itemStyle: { opacity: 0.85 }, // keep overlapping big bubbles readable
+      emphasis: { focus: 'series', scale: 1.15 }, // gentle grow; 1.4 on a ~109px bubble is overwhelming
       labelLayout: { hideOverlap: true },
       label: {
         show: showLabels,
@@ -256,7 +259,7 @@
       },
       yAxis: {
         type: 'value',
-        name: 'AA Intelligence Index\n(higher is better)',
+        name: 'AA Intelligence Index (max)\n(higher is better)',
         nameLocation: 'middle',
         nameGap: 44,
         splitLine: { lineStyle: { type: 'dashed' } }
@@ -277,8 +280,10 @@
     return orgs.map(org => ({
       name: org,
       type: 'scatter',
+      clip: false, // big bubbles near the edge should not be cut off
       symbolSize: sizeByParams2 ? (val, p) => bubbleSize(p.data.model.param_count) : 16,
-      emphasis: { focus: 'series', scale: 1.4 },
+      itemStyle: { opacity: 0.85 }, // keep overlapping big bubbles readable
+      emphasis: { focus: 'series', scale: 1.15 }, // gentle grow; 1.4 on a ~109px bubble is overwhelming
       labelLayout: { hideOverlap: true },
       label: {
         show: showLabels2,

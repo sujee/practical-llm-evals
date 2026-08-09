@@ -2,7 +2,7 @@
   "provider": "Nebius Token Factory",
   "provider_url": "https://tokenfactory.nebius.com/",
   "updated_at": "2026-08-08",
-  "comment": "Prices in USD per 1M tokens. Blended pricing = 0.75 x input + 0.25 x output (3:1 mix). param_count in billions.  Only showing latest models. AA Intelligence Index is a proprietary metric of model intelligence (higher is better).",
+  "comment": "Prices in USD per 1M tokens. Blended pricing = 0.75 x input + 0.25 x output (3:1 mix). param_count in billions.  Only showing latest models. AA Intelligence Index is measured on max/high reasoning. (higher is better).",
   "models": [
     {
       "model_id": "deepseek-ai/DeepSeek-V4-Flash-0731",
