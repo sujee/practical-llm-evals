@@ -173,6 +173,9 @@
 
   const fmtPrice = v => '$' + (v < 1 ? v.toFixed(3).replace(/0+$/, '').replace(/\.$/, '') : v.toFixed(2));
 
+  // Context window is stored in K tokens: 200 -> "200K", 1024 -> "1M"
+  const fmtCtx = k => (k >= 1024 ? (k / 1024) + 'M' : k + 'K');
+
   // Bubble area proportional to param count (size ~ sqrt), wide scaling so big models stand out
   // e.g. 30B -> ~14px, 1000B -> ~66px, 2800B (Kimi-K3) -> ~109px
   const bubbleSize = params => Math.min(3 + Math.sqrt(params) * 2, 120);
@@ -215,6 +218,7 @@
       `Pricing (1M input): <b>${fmtPrice(m.price_input_1m)}</b>`,
       `Pricing (1M output): <b>${fmtPrice(m.price_output_1m)}</b>`,
       `Parameters: <b>${m.param_count}B</b>`,
+      `Context: <b>${fmtCtx(m.context_window_K)} tokens</b>`,
       `Released: <b>${m.model_release_date}</b>`
     ].join('<br>');
   }
