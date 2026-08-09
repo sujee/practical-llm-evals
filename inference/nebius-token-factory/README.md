@@ -8,6 +8,7 @@ Some visualizations for Token Factory models.
 
 - 📈 [Intelligence and Pricing](https://sujee.github.io/practical-llm-evals/inference/nebius-token-factory/#pricing) — AA Intelligence Index vs price 
 - 📅 [Release Time line](https://sujee.github.io/practical-llm-evals/inference/nebius-token-factory/#release) — AA Intelligence Index vs model release date
+- 🪜 [Context Frontier](https://sujee.github.io/practical-llm-evals/inference/nebius-token-factory/#context) — largest context window available over time
 
 ## Getting Model Info
 

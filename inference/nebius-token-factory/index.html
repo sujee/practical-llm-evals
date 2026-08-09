@@ -84,7 +84,7 @@
   .controls label { font-size: 0.85rem; color: var(--muted); display: flex; align-items: center; gap: 6px; }
   .controls input[type="range"] { width: 140px; cursor: pointer; accent-color: var(--text); }
   .controls .slider-val { min-width: 2ch; font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
-  #chart, #chart2 {
+  #chart, #chart2, #chart3 {
     width: 100%;
     height: clamp(380px, 62vh, 680px);
     background: var(--card);
@@ -114,7 +114,7 @@
   <p class="data-link">Data: <a href="model-info.json" target="_blank" rel="noopener"><code>model-info.json</code></a> (updated <span id="updated-at"></span>)</p>
   <nav class="toc">
     <span class="toc-label">Jump to:</span>
-    <a href="#pricing">Intelligence and Pricing</a><span class="sep">|</span><a href="#release">Release Time</a>
+    <a href="#pricing">Intelligence and Pricing</a><span class="sep">|</span><a href="#release">Release Time</a><span class="sep">|</span><a href="#context">Context Frontier</a>
   </nav>
   <h2 id="pricing">Intelligence and Pricing</h2>
   <p class="subtitle">AA Intelligence Index vs price ($ per 1M tokens). Blended pricing = 0.75 &times; input + 0.25 &times; output (3:1 mix). Bubble area is proportional to parameter count. Hover a point for full model details. Click legend entries to show/hide model families.</p>
@@ -147,6 +147,14 @@
     <button id="btn-bubbles2" class="active">Size &prop; params: ON</button>
   </div>
   <div id="chart2"></div>
+
+  <h2 id="context">Context Frontier</h2>
+  <p class="subtitle">Context window (log₂ scale) vs model release date. The step line tracks the largest context window available at each point in time. Bubble area is proportional to parameter count. Hover a point for full model details. Click legend entries to show/hide model families.</p>
+  <div class="controls">
+    <button id="btn-labels3" class="active">Labels: ON</button>
+    <button id="btn-bubbles3" class="active">Size &prop; params: ON</button>
+  </div>
+  <div id="chart3"></div>
 </main>
 
 <script>
@@ -189,16 +197,19 @@
 
   // Theme comes from the inline head script (localStorage or prefers-color-scheme)
   let theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
-  let chart, chart2;
+  let chart, chart2, chart3;
 
   function initCharts() {
     if (chart) chart.dispose();
     if (chart2) chart2.dispose();
+    if (chart3) chart3.dispose();
     // ECharts' built-in 'dark' theme re-themes axes, legend and tooltip automatically
     chart = echarts.init(document.getElementById('chart'), theme === 'dark' ? 'dark' : null);
     chart.setOption(buildOption());
     chart2 = echarts.init(document.getElementById('chart2'), theme === 'dark' ? 'dark' : null);
     chart2.setOption(buildOptionRelease());
+    chart3 = echarts.init(document.getElementById('chart3'), theme === 'dark' ? 'dark' : null);
+    chart3.setOption(buildOptionContext());
   }
 
   let priceMetric = 'pricing_blended_1m';
@@ -207,9 +218,18 @@
   let sizeByParams = true;
   let showLabels2 = true;
   let sizeByParams2 = true;
+  let showLabels3 = true;
+  let sizeByParams3 = true;
 
-  // Shared tooltip for both charts
+  // Shared tooltip for all charts
   function tooltipFormatter(p) {
+    if (p.data && p.data.frontier) {
+      if (!p.data.date) return '';
+      return [
+        `Largest context available: <b>${fmtCtx(p.value[1])}</b> tokens`,
+        `Since <b>${p.data.date}</b> (${p.data.modelId})`
+      ].join('<br>');
+    }
     const m = p.data.model;
     return [
       `<b>${m.model_id}</b>`,
@@ -217,7 +237,7 @@
       `Pricing (1M blended): <b>${fmtPrice(m.pricing_blended_1m)}</b>`,
       `Pricing (1M input): <b>${fmtPrice(m.price_input_1m)}</b>`,
       `Pricing (1M output): <b>${fmtPrice(m.price_output_1m)}</b>`,
-      `Parameters: <b>${m.param_count}B</b>`,
+      `Parameters: <b>${m.param_count} B</b>`,
       `Context: <b>${fmtCtx(m.context_window_K)} tokens</b>`,
       `Released: <b>${m.model_release_date}</b>`
     ].join('<br>');
@@ -330,6 +350,87 @@
     };
   }
 
+  // Frontier: running max of context window over release dates (+ a zero-size end
+  // point so the final step line extends to the right edge of the chart)
+  const sortedByDate = [...models].sort((a, b) => parseDate(a.model_release_date) - parseDate(b.model_release_date));
+  const frontierData = [];
+  let runMax = 0;
+  for (const m of sortedByDate) {
+    if (m.context_window_K > runMax) {
+      runMax = m.context_window_K;
+      frontierData.push({ value: [parseDate(m.model_release_date), runMax], frontier: true, date: m.model_release_date, modelId: m.model_id });
+    }
+  }
+  if (frontierData.length) frontierData.push({ value: [timeMax, runMax], frontier: true });
+
+  // Context frontier chart: one scatter series per org + a step line for the running max
+  function buildSeriesContext() {
+    return orgs.map(org => ({
+      name: org,
+      type: 'scatter',
+      clip: false,
+      symbolSize: sizeByParams3 ? (val, p) => bubbleSize(p.data.model.param_count) : 16,
+      itemStyle: { opacity: 0.85 },
+      emphasis: { focus: 'series', scale: 1.15 },
+      labelLayout: { hideOverlap: true },
+      label: {
+        show: showLabels3,
+        position: 'right',
+        fontSize: 11,
+        color: theme === 'dark' ? '#8b94a3' : '#666',
+        formatter: p => p.data.model.short
+      },
+      data: models.filter(m => m.model_id.startsWith(org + '/')).map(m => ({
+        value: [parseDate(m.model_release_date), m.context_window_K],
+        model: m
+      }))
+    })).concat([{
+      name: 'Frontier (largest context)',
+      type: 'line',
+      step: 'end',
+      z: 5,
+      symbol: 'circle',
+      symbolSize: (val, p) => (p.data.date ? 7 : 0), // hide the padded end point so it gets no hover target
+      color: '#e8590c', // orange reads well on both light and dark themes
+      lineStyle: { width: 2.5 },
+      emphasis: { scale: 1.4 },
+      data: frontierData
+    }]);
+  }
+
+  function buildOptionContext() {
+    return {
+      animationDuration: 400,
+      backgroundColor: 'transparent',
+      grid: { left: 70, right: 110, top: 60, bottom: 60 },
+      legend: { top: 12, type: 'scroll' },
+      tooltip: { trigger: 'item', formatter: tooltipFormatter },
+      xAxis: {
+        type: 'time',
+        name: 'Release date',
+        nameLocation: 'middle',
+        nameGap: 34,
+        min: timeMin,
+        max: timeMax,
+        splitLine: { lineStyle: { type: 'dashed' } }
+      },
+      yAxis: {
+        type: 'log',
+        logBase: 2,
+        // Power-of-two bounds from the data: 128K..2048K for the current 200K..1024K range,
+        // and a future 2M+ model expands the axis instead of falling off it
+        min: Math.pow(2, Math.floor(Math.log2(Math.min(...models.map(m => m.context_window_K))))),
+        max: Math.pow(2, Math.ceil(Math.log2(Math.max(...models.map(m => m.context_window_K)))) + 1),
+        name: 'Context window (tokens)\nlarger is better',
+        nameLocation: 'middle',
+        nameGap: 44,
+        axisLabel: { formatter: v => fmtCtx(v) },
+        splitLine: { lineStyle: { type: 'dashed' } }
+      },
+      series: buildSeriesContext()
+    };
+  }
+
   initCharts();
 
   const selMetric = document.getElementById('sel-metric');
@@ -339,6 +440,8 @@
   const btnBubbles = document.getElementById('btn-bubbles');
   const btnLabels2 = document.getElementById('btn-labels2');
   const btnBubbles2 = document.getElementById('btn-bubbles2');
+  const btnLabels3 = document.getElementById('btn-labels3');
+  const btnBubbles3 = document.getElementById('btn-bubbles3');
   const btnTheme = document.getElementById('btn-theme');
 
   function renderThemeBtn() {
@@ -367,6 +470,20 @@
     btnBubbles.innerHTML = 'Size &prop; params: ' + (sizeByParams ? 'ON' : 'OFF');
     btnBubbles.classList.toggle('active', sizeByParams);
     chart.setOption(buildOption());
+  });
+
+  btnLabels3.addEventListener('click', () => {
+    showLabels3 = !showLabels3;
+    btnLabels3.textContent = 'Labels: ' + (showLabels3 ? 'ON' : 'OFF');
+    btnLabels3.classList.toggle('active', showLabels3);
+    chart3.setOption(buildOptionContext());
+  });
+
+  btnBubbles3.addEventListener('click', () => {
+    sizeByParams3 = !sizeByParams3;
+    btnBubbles3.innerHTML = 'Size &prop; params: ' + (sizeByParams3 ? 'ON' : 'OFF');
+    btnBubbles3.classList.toggle('active', sizeByParams3);
+    chart3.setOption(buildOptionContext());
   });
 
   // Slider bounds from the data (currently 14..57)
@@ -402,6 +519,7 @@
   window.addEventListener('resize', () => {
     chart && chart.resize();
     chart2 && chart2.resize();
+    chart3 && chart3.resize();
   });
 })();
 </script>
