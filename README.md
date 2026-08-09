@@ -1,13 +1,16 @@
 # Practice LLM Evals
+
 Practical benchmarks, performance tests, and experiential evaluations for open models.
 
 ## ⚡ Inference
+
 Inference benchmarks and model visualizations.
 
 - 📊 [Nebius Token Factory Models](./inference/nebius-token-factory/) — interactive visualization of Token Factory models.
 
 
 ## 🎉 Fun Benchmarks & Projects
+
 A collection of fun mini-projects built with AI coding agents and models — playable games, simulations, and 3D scenes.
 
 [Explore →](./fun/README.md)
