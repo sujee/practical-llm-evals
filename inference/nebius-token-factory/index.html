@@ -127,8 +127,8 @@
       </select>
     </label>
     <label>Y axis: intelligence &ge;
-      <input type="range" id="slider-intel" step="1" value="40">
-      <span class="slider-val" id="intel-val">40</span>
+      <input type="range" id="slider-intel" step="1">
+      <span class="slider-val" id="intel-val"></span>
     </label>
     <button id="btn-labels" class="active">Labels: ON</button>
     <button id="btn-bubbles" class="active">Size &prop; params: ON</button>
@@ -213,7 +213,7 @@
   }
 
   let priceMetric = 'pricing_blended_1m';
-  let minIntel = 40;
+  let minIntel = Math.min(...models.map(m => m.aa_intelligence_index));
   let showLabels = true;
   let sizeByParams = true;
   let showLabels2 = true;
@@ -490,6 +490,8 @@
   const intelValues = models.map(m => m.aa_intelligence_index);
   sliderIntel.min = Math.min(...intelValues);
   sliderIntel.max = Math.max(...intelValues);
+  sliderIntel.value = sliderIntel.min; // default to minimum so all models show on every graph
+  intelVal.textContent = sliderIntel.min;
 
   sliderIntel.addEventListener('input', () => {
     minIntel = +sliderIntel.value;
