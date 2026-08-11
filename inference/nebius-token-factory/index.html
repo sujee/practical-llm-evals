@@ -96,6 +96,12 @@
     cursor: pointer;
   }
   .controls button.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .controls button, .controls select, #btn-theme {
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .controls button:hover, .controls select:hover, #btn-theme:hover {
+    border-color: var(--text);
+  }
   .controls label { font-size: 0.85rem; color: var(--muted); display: flex; align-items: center; gap: 6px; }
   .controls input[type="range"] { width: 140px; cursor: pointer; accent-color: var(--text); }
   .controls .slider-val { min-width: 2ch; font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
