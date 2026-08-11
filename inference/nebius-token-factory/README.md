@@ -12,9 +12,15 @@ Some visualizations for Token Factory models.
 
 ## Getting Model Info
 
-[Latest models list](tf-models-list.json)
+[Latest models list file](tf-models-list.json)
 
-Use `verbose` flag to get all details. See below.
+Available here : https://tokenfactory.nebius.com/api/public/models_info  
+
+```bash
+curl   https://tokenfactory.nebius.com/api/public/models_info
+```
+
+You can also use chat completions API as below
 
 ```bash
 export NEBIUS_API_KEY='api key goes here'
