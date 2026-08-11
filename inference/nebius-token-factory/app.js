@@ -13,6 +13,10 @@
   }
   document.getElementById('updated-at').textContent = updatedAt;
 
+  let shiftDown = false;
+  window.addEventListener('keydown', e => { if (e.key === 'Shift') shiftDown = true; });
+  window.addEventListener('keyup', e => { if (e.key === 'Shift') shiftDown = false; });
+
   // Short display name = part after the org prefix, e.g. "moonshotai/Kimi-K3" -> "Kimi-K3"
   models.forEach(m => { m.short = m.model_id.split('/').pop(); });
 
@@ -50,6 +54,35 @@
     chart2.setOption(buildOptionRelease());
     chart3 = echarts.init(document.getElementById('chart3'), theme === 'dark' ? 'dark' : null);
     chart3.setOption(buildOptionContext());
+  }
+
+  // Shift+click a legend family to isolate it; Shift+click it again to restore all.
+  // Items in `alwaysVisible` (e.g. the frontier line) stay shown through isolations.
+  function enableShiftIsolate(chart, alwaysVisible = []) {
+    let applying = false;
+    chart.on('legendselectchanged', params => {
+      if (applying || !shiftDown) return;
+      applying = true;
+
+      const allNames = Object.keys(params.selected);
+      const familyNames = allNames.filter(n => !alwaysVisible.includes(n));
+      const visibleFamilies = familyNames.filter(n => params.selected[n]);
+
+      if (visibleFamilies.length === 0) {
+        // The clicked family was the only one showing (or nothing was) -> restore everything.
+        chart.dispatchAction({ type: 'legendAllSelect' });
+      } else {
+        // Isolate the clicked family while keeping always-visible items on.
+        allNames.forEach(name => {
+          if (name !== params.name && !alwaysVisible.includes(name)) {
+            chart.dispatchAction({ type: 'legendUnSelect', name });
+          }
+        });
+        chart.dispatchAction({ type: 'legendSelect', name: params.name });
+      }
+
+      applying = false;
+    });
   }
 
   let priceMetric = 'pricing_blended_1m';
@@ -272,6 +305,11 @@
   }
 
   initCharts();
+
+  const FRONTIER_LINE = 'Frontier (largest context)';
+  enableShiftIsolate(chart);
+  enableShiftIsolate(chart2);
+  enableShiftIsolate(chart3, [FRONTIER_LINE]);
 
   const selMetric = document.getElementById('sel-metric');
   const sliderIntel = document.getElementById('slider-intel');
