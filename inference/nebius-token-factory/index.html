@@ -27,6 +27,10 @@
     --error-bg: #3a2f10; --error-border: #b8860b; --error-code-bg: #4a3f1a;
   }
   * { box-sizing: border-box; }
+  button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible {
+    outline: 2px solid var(--link);
+    outline-offset: 2px;
+  }
   body {
     margin: 0;
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
