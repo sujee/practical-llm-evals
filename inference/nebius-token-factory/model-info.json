@@ -143,6 +143,16 @@
       "price_input_1m": 0.06,
       "price_output_1m": 0.24,
       "pricing_blended_1m": 0.105
+    },
+    {
+      "model_id": "openai/gpt-oss-120b",
+      "model_release_date": "2025-08-05",
+      "aa_intelligence_index": 24,
+      "param_count": 120,
+      "context_window_K": 131,
+      "price_input_1m": 0.15,
+      "price_output_1m": 0.6,
+      "pricing_blended_1m": 0.2625
     }
   ]
 }
