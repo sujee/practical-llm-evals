@@ -38,10 +38,9 @@
     color: var(--text);
   }
   main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 40px; position: relative; }
+  .page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .page-header h1 { flex: 1; margin: 8px 0 4px; }
   #btn-theme {
-    position: absolute;
-    top: 24px;
-    right: 16px;
     padding: 6px 14px;
     font-size: 0.85rem;
     border: 1px solid var(--control-border);
@@ -129,8 +128,10 @@
 </head>
 <body>
 <main>
-  <button id="btn-theme">Theme: Light</button>
-  <h1>Nebius Token Factory Models</h1>
+  <div class="page-header">
+    <h1>Nebius Token Factory Models</h1>
+    <button id="btn-theme">Theme: Light</button>
+  </div>
   <p class="provider-link"><a href="https://tokenfactory.nebius.com/" target="_blank" rel="noopener">https://tokenfactory.nebius.com/</a></p>
   <p class="data-link">Data: <a href="model-info.json" target="_blank" rel="noopener"><code>model-info.json</code></a> (updated <span id="updated-at"></span>)</p>
   <nav class="toc">
