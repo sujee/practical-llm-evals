@@ -75,6 +75,16 @@
   .data-link { margin: 4px 0 0; color: var(--faint); font-size: 0.8rem; }
   .subtitle { margin: 0 0 16px; color: var(--muted); font-size: 0.95rem; }
   .legend-hint { display: block; margin-top: 2px; color: var(--faint); font-size: 0.88em; }
+  .legend-hint kbd {
+    display: inline-block;
+    background: var(--card);
+    border: 1px solid var(--control-border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 0.85em;
+    line-height: 1;
+    box-shadow: 0 1px 0 var(--control-border);
+  }
   .controls { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
   .controls button, .controls select {
     padding: 6px 14px;
@@ -122,7 +132,7 @@
     <a href="#pricing">Intelligence and Pricing</a><span class="sep">|</span><a href="#release">Release Time</a><span class="sep">|</span><a href="#context">Context Frontier</a>
   </nav>
   <h2 id="pricing">Intelligence and Pricing</h2>
-  <p class="subtitle">AA Intelligence Index vs price ($ per 1M tokens). Blended pricing = 0.75 &times; input + 0.25 &times; output (3:1 mix). Bubble area is proportional to parameter count. Hover a point for full model details.<br><span class="legend-hint">Click legend entries to show/hide model families. Shift-click a family to isolate it; shift-click again to restore all.</span></p>
+  <p class="subtitle">AA Intelligence Index vs price ($ per 1M tokens). Blended pricing = 0.75 &times; input + 0.25 &times; output (3:1 mix). Bubble area is proportional to parameter count. Hover a point for full model details.<br><span class="legend-hint">Click legend entries to show/hide model families. <kbd>Shift</kbd>+click a family to isolate it; <kbd>Shift</kbd>+click again to restore all.</span></p>
   <div class="controls">
     <label>X axis:
       <select id="sel-metric">
@@ -146,7 +156,7 @@
   <div id="chart"></div>
 
   <h2 id="release">Release Time</h2>
-  <p class="subtitle">AA Intelligence Index vs model release date. Bubble area is proportional to parameter count. Hover a point for full model details.<br><span class="legend-hint">Click legend entries to show/hide model families. Shift-click a family to isolate it; shift-click again to restore all.</span></p>
+  <p class="subtitle">AA Intelligence Index vs model release date. Bubble area is proportional to parameter count. Hover a point for full model details.<br><span class="legend-hint">Click legend entries to show/hide model families. <kbd>Shift</kbd>+click a family to isolate it; <kbd>Shift</kbd>+click again to restore all.</span></p>
   <div class="controls">
     <button id="btn-labels2" class="active">Labels: ON</button>
     <button id="btn-bubbles2" class="active">Size &prop; params: ON</button>
@@ -154,7 +164,7 @@
   <div id="chart2"></div>
 
   <h2 id="context">Context Frontier</h2>
-  <p class="subtitle">Context window (log₂ scale) vs model release date. The step line tracks the largest context window available at each point in time. Bubble area is proportional to parameter count. Hover a point for full model details.<br><span class="legend-hint">Click legend entries to show/hide model families. Shift-click a family to isolate it; shift-click again to restore all.</span></p>
+  <p class="subtitle">Context window (log₂ scale) vs model release date. The step line tracks the largest context window available at each point in time. Bubble area is proportional to parameter count. Hover a point for full model details.<br><span class="legend-hint">Click legend entries to show/hide model families. <kbd>Shift</kbd>+click a family to isolate it; <kbd>Shift</kbd>+click again to restore all.</span></p>
   <div class="controls">
     <button id="btn-labels3" class="active">Labels: ON</button>
     <button id="btn-bubbles3" class="active">Size &prop; params: ON</button>
