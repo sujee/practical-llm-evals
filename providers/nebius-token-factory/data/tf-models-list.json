@@ -5,21 +5,30 @@
         "created_at": "2026-06-01T00:00:00.000Z",
         "status": "active",
         "logo_url": "",
-        "huggingface_url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash",
-        "description": "A DeepSeek-V4 variant optimized for efficient fine-tuning and low-latency text generation.",
+        "huggingface_url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731",
+        "description": "DeepSeek V4 Flash 0731 is a 1M-context reasoning model designed for coding and agentic workloads.",
         "vendor": "deepseek",
         "tags": [
-            "131K context"
+            "1M context",
+            "reasoning",
+            "JSON mode",
+            "code",
+            "math"
         ],
         "use_cases": [
+            "text",
+            "reasoning",
+            "function_calling",
+            "code",
+            "context_and_rag",
             "fine_tune"
         ],
         "license": {
-            "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash/blob/main/LICENSE",
-            "name": "DeepSeek License",
+            "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731/blob/main/LICENSE",
+            "name": "MIT License",
             "type": ""
         },
-        "size_b": 0,
+        "size_b": 304,
         "quality": 0,
         "fine_tune": {
             "model_id": "deepseek-ai/DeepSeek-V4-Flash"
@@ -29,7 +38,7 @@
                 "model_id": "deepseek-ai/DeepSeek-V4-Flash",
                 "model_type": "text2text",
                 "model_name": "DeepSeek-V4-Flash",
-                "model_description": "A DeepSeek-V4 variant optimized for efficient fine-tuning and low-latency text generation.",
+                "model_description": "DeepSeek V4 Flash 0731 is a 1M-context reasoning model designed for coding and agentic workloads.",
                 "label": "cheap",
                 "regions": [
                     {
@@ -39,20 +48,104 @@
                 ],
                 "external_provider": false,
                 "tags": [
-                    "131K context"
+                    "1M context",
+                    "reasoning",
+                    "JSON mode",
+                    "code",
+                    "math"
                 ],
                 "use_cases": [
+                    "text",
+                    "reasoning",
+                    "function_calling",
+                    "code",
+                    "context_and_rag",
                     "fine_tune"
                 ],
-                "context_window_k": 131,
-                "max_model_len": 8000,
+                "context_window_k": 1024,
+                "max_model_len": 1048576,
                 "tokens_per_second": 291.77,
                 "input_price_per_million_tokens": 0.14,
                 "output_price_per_million_tokens": 0.28,
                 "quantization": "fp8"
             }
         ],
-        "context_window_k": 131
+        "context_window_k": 1024
+    },
+    {
+        "type": "text2text",
+        "name": "DeepSeek-V4-Flash-0731",
+        "created_at": "2026-07-31T00:00:00.000Z",
+        "status": "active",
+        "logo_url": "",
+        "huggingface_url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731",
+        "description": "DeepSeek V4 Flash 0731 is a 1M-context reasoning model designed for coding and agentic workloads.",
+        "vendor": "deepseek",
+        "tags": [
+            "1M context",
+            "reasoning",
+            "JSON mode",
+            "code",
+            "math"
+        ],
+        "use_cases": [
+            "text",
+            "reasoning",
+            "function_calling",
+            "code",
+            "context_and_rag",
+            "responses_api",
+            "fine_tune"
+        ],
+        "license": {
+            "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731/blob/main/LICENSE",
+            "name": "MIT License",
+            "type": ""
+        },
+        "size_b": 304,
+        "quality": 0,
+        "fine_tune": {
+            "model_id": "deepseek-ai/DeepSeek-V4-Flash"
+        },
+        "flavors": [
+            {
+                "model_id": "deepseek-ai/DeepSeek-V4-Flash-0731",
+                "model_type": "text2text",
+                "model_name": "DeepSeek-V4-Flash-0731",
+                "model_description": "DeepSeek V4 Flash 0731 is a 1M-context reasoning model designed for coding and agentic workloads.",
+                "label": "cheap",
+                "regions": [
+                    {
+                        "country_code": "US",
+                        "name": "us-central1"
+                    }
+                ],
+                "external_provider": false,
+                "tags": [
+                    "1M context",
+                    "reasoning",
+                    "JSON mode",
+                    "code",
+                    "math"
+                ],
+                "use_cases": [
+                    "text",
+                    "reasoning",
+                    "function_calling",
+                    "code",
+                    "context_and_rag",
+                    "responses_api",
+                    "fine_tune"
+                ],
+                "context_window_k": 1024,
+                "max_model_len": 1048576,
+                "tokens_per_second": 157,
+                "input_price_per_million_tokens": 0.14,
+                "output_price_per_million_tokens": 0.28,
+                "quantization": "fp8"
+            }
+        ],
+        "context_window_k": 1024
     },
     {
         "type": "text2text",
@@ -71,6 +164,7 @@
             "JSON mode"
         ],
         "use_cases": [
+            "text",
             "code",
             "reasoning",
             "function_calling",
@@ -105,6 +199,7 @@
                     "JSON mode"
                 ],
                 "use_cases": [
+                    "text",
                     "code",
                     "reasoning",
                     "function_calling",
@@ -135,6 +230,8 @@
             "131K context"
         ],
         "use_cases": [
+            "text",
+            "image",
             "function_calling"
         ],
         "policy_url": "https://ai.google.dev/gemma/terms",
@@ -163,6 +260,8 @@
                     "131K context"
                 ],
                 "use_cases": [
+                    "text",
+                    "image",
                     "function_calling"
                 ],
                 "context_window_k": 110,
@@ -189,6 +288,7 @@
             "128K context"
         ],
         "use_cases": [
+            "text",
             "summarization",
             "context_and_rag",
             "code",
@@ -225,6 +325,7 @@
                     "128K context"
                 ],
                 "use_cases": [
+                    "text",
                     "summarization",
                     "context_and_rag",
                     "code",
@@ -293,7 +394,7 @@
                     "responses_api"
                 ],
                 "context_window_k": 196,
-                "max_model_len": 8000,
+                "max_model_len": 196608,
                 "tokens_per_second": 36.8,
                 "input_price_per_million_tokens": 0.3,
                 "output_price_per_million_tokens": 1.2,
@@ -354,7 +455,7 @@
                     "video"
                 ],
                 "context_window_k": 1049,
-                "max_model_len": 8000,
+                "max_model_len": 1048576,
                 "tokens_per_second": 248,
                 "input_price_per_million_tokens": 0.3,
                 "output_price_per_million_tokens": 1.2,
@@ -419,7 +520,7 @@
                     "responses_api"
                 ],
                 "context_window_k": 256,
-                "max_model_len": 8000,
+                "max_model_len": 262144,
                 "tokens_per_second": 60,
                 "input_price_per_million_tokens": 0.95,
                 "output_price_per_million_tokens": 4,
@@ -482,7 +583,7 @@
                     "summarization"
                 ],
                 "context_window_k": 256,
-                "max_model_len": 8000,
+                "max_model_len": 262144,
                 "tokens_per_second": 231.26,
                 "input_price_per_million_tokens": 0.95,
                 "output_price_per_million_tokens": 4,
@@ -541,7 +642,7 @@
                     "context_and_rag"
                 ],
                 "context_window_k": 1024,
-                "max_model_len": 8000,
+                "max_model_len": 1048576,
                 "tokens_per_second": 120,
                 "input_price_per_million_tokens": 3,
                 "output_price_per_million_tokens": 15,
@@ -564,6 +665,7 @@
             "JSON mode"
         ],
         "use_cases": [
+            "text",
             "code",
             "complex_writing",
             "context_and_rag",
@@ -599,6 +701,7 @@
                     "JSON mode"
                 ],
                 "use_cases": [
+                    "text",
                     "code",
                     "complex_writing",
                     "context_and_rag",
@@ -632,6 +735,7 @@
             "JSON mode"
         ],
         "use_cases": [
+            "text",
             "code",
             "complex_writing",
             "context_and_rag",
@@ -667,6 +771,7 @@
                     "JSON mode"
                 ],
                 "use_cases": [
+                    "text",
                     "code",
                     "complex_writing",
                     "context_and_rag",
@@ -700,6 +805,8 @@
             "JSON mode"
         ],
         "use_cases": [
+            "text",
+            "image",
             "summarization",
             "context_and_rag",
             "reasoning",
@@ -732,13 +839,15 @@
                     "JSON mode"
                 ],
                 "use_cases": [
+                    "text",
+                    "image",
                     "summarization",
                     "context_and_rag",
                     "reasoning",
                     "function_calling"
                 ],
                 "context_window_k": 256,
-                "max_model_len": 8000,
+                "max_model_len": 262144,
                 "tokens_per_second": 30,
                 "input_tps": 140,
                 "input_price_per_million_tokens": 0.1,
@@ -798,7 +907,7 @@
                     "complex_writing"
                 ],
                 "context_window_k": 128,
-                "max_model_len": 8000,
+                "max_model_len": 131072,
                 "tokens_per_second": 25,
                 "input_price_per_million_tokens": 0.6,
                 "output_price_per_million_tokens": 1.8,
@@ -820,6 +929,7 @@
             "262K context"
         ],
         "use_cases": [
+            "text",
             "reasoning",
             "function_calling",
             "code",
@@ -851,6 +961,7 @@
                     "262K context"
                 ],
                 "use_cases": [
+                    "text",
                     "reasoning",
                     "function_calling",
                     "code",
@@ -919,7 +1030,7 @@
                     "responses_api"
                 ],
                 "context_window_k": 262,
-                "max_model_len": 8000,
+                "max_model_len": 262144,
                 "tokens_per_second": 90,
                 "input_price_per_million_tokens": 0.06,
                 "output_price_per_million_tokens": 0.24,
@@ -981,7 +1092,7 @@
                     "complex_writing"
                 ],
                 "context_window_k": 256,
-                "max_model_len": 8000,
+                "max_model_len": 262144,
                 "tokens_per_second": 127,
                 "input_price_per_million_tokens": 0.3,
                 "output_price_per_million_tokens": 0.9,
@@ -1045,7 +1156,7 @@
                     "responses_api"
                 ],
                 "context_window_k": 1024,
-                "max_model_len": 8000,
+                "max_model_len": 1048576,
                 "tokens_per_second": 523,
                 "input_price_per_million_tokens": 1,
                 "output_price_per_million_tokens": 3,
@@ -1057,14 +1168,20 @@
     {
         "type": "text2text",
         "name": "Nemotron-3.5-Lightning",
-        "created_at": 1786454551,
+        "created_at": "2026-08-11T00:00:00.000Z",
         "status": "active",
+        "logo_url": "",
         "huggingface_url": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16",
         "description": "NVIDIA's 30B-parameter hybrid MoE model with 3B active parameters per token, designed for efficient agentic reasoning, tool use, coding, and long-context workflows.",
         "vendor": "nvidia",
-        "tags": [],
+        "tags": [
+            "1M context",
+            "reasoning",
+            "code",
+            "function calling",
+            "MTP"
+        ],
         "use_cases": [
-            "dedicated-endpoint",
             "text",
             "reasoning",
             "function_calling",
@@ -1073,11 +1190,11 @@
             "responses_api"
         ],
         "license": {
-            "url": "https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/",
-            "name": "NVIDIA Open Model License",
+            "url": "https://openmdw.ai/license/1-1/",
+            "name": "OpenMDW v1.1",
             "type": ""
         },
-        "size_b": 0,
+        "size_b": 30,
         "quality": 0,
         "flavors": [
             {
@@ -1093,9 +1210,14 @@
                     }
                 ],
                 "external_provider": false,
-                "tags": [],
+                "tags": [
+                    "1M context",
+                    "reasoning",
+                    "code",
+                    "function calling",
+                    "MTP"
+                ],
                 "use_cases": [
-                    "dedicated-endpoint",
                     "text",
                     "reasoning",
                     "function_calling",
@@ -1104,7 +1226,7 @@
                     "responses_api"
                 ],
                 "context_window_k": 1024,
-                "max_model_len": 8000,
+                "max_model_len": 1048576,
                 "tokens_per_second": 314.12,
                 "input_price_per_million_tokens": 0.06,
                 "output_price_per_million_tokens": 0.24,
@@ -1130,6 +1252,7 @@
             "reasoning"
         ],
         "use_cases": [
+            "text",
             "code",
             "fine_tune",
             "function_calling",
@@ -1167,6 +1290,7 @@
                     "reasoning"
                 ],
                 "use_cases": [
+                    "text",
                     "code",
                     "fine_tune",
                     "function_calling",
@@ -1196,6 +1320,8 @@
             "JSON mode"
         ],
         "use_cases": [
+            "text",
+            "image",
             "summarization",
             "context_and_rag"
         ],
@@ -1224,11 +1350,13 @@
                     "JSON mode"
                 ],
                 "use_cases": [
+                    "text",
+                    "image",
                     "summarization",
                     "context_and_rag"
                 ],
                 "context_window_k": 32,
-                "max_model_len": 8000,
+                "max_model_len": 32000,
                 "tokens_per_second": 49.5,
                 "input_tps": 140,
                 "input_price_per_million_tokens": 0.658,
@@ -1251,6 +1379,8 @@
             "32K context"
         ],
         "use_cases": [
+            "text",
+            "image",
             "responses_api"
         ],
         "license": {
@@ -1278,6 +1408,8 @@
                     "32K context"
                 ],
                 "use_cases": [
+                    "text",
+                    "image",
                     "responses_api"
                 ],
                 "context_window_k": 32,
@@ -1306,6 +1438,7 @@
             "JSON mode"
         ],
         "use_cases": [
+            "text",
             "code",
             "function_calling",
             "context_and_rag",
@@ -1343,6 +1476,7 @@
                     "JSON mode"
                 ],
                 "use_cases": [
+                    "text",
                     "code",
                     "function_calling",
                     "context_and_rag",
@@ -1375,6 +1509,7 @@
             "JSON mode"
         ],
         "use_cases": [
+            "text",
             "code",
             "function_calling",
             "context_and_rag",
@@ -1412,6 +1547,7 @@
                     "JSON mode"
                 ],
                 "use_cases": [
+                    "text",
                     "code",
                     "function_calling",
                     "context_and_rag",
@@ -1445,6 +1581,7 @@
             "JSON mode"
         ],
         "use_cases": [
+            "text",
             "code",
             "reasoning",
             "function_calling",
@@ -1484,6 +1621,7 @@
                     "JSON mode"
                 ],
                 "use_cases": [
+                    "text",
                     "code",
                     "reasoning",
                     "function_calling",
@@ -1582,6 +1720,7 @@
             "JSON mode"
         ],
         "use_cases": [
+            "text",
             "code",
             "reasoning",
             "function_calling",
@@ -1616,13 +1755,14 @@
                     "JSON mode"
                 ],
                 "use_cases": [
+                    "text",
                     "code",
                     "reasoning",
                     "function_calling",
                     "context_and_rag"
                 ],
                 "context_window_k": 128,
-                "max_model_len": 8000,
+                "max_model_len": 128000,
                 "tokens_per_second": 85,
                 "input_price_per_million_tokens": 0.15,
                 "output_price_per_million_tokens": 1.2,
@@ -1681,7 +1821,7 @@
                     "responses_api"
                 ],
                 "context_window_k": 262,
-                "max_model_len": 8000,
+                "max_model_len": 262144,
                 "tokens_per_second": 80,
                 "input_price_per_million_tokens": 0.6,
                 "output_price_per_million_tokens": 3.6,
@@ -1707,6 +1847,7 @@
             "math"
         ],
         "use_cases": [
+            "text",
             "reasoning",
             "function_calling",
             "context_and_rag",
@@ -1742,6 +1883,7 @@
                     "math"
                 ],
                 "use_cases": [
+                    "text",
                     "reasoning",
                     "function_calling",
                     "context_and_rag",
@@ -1807,7 +1949,7 @@
                     "context_and_rag"
                 ],
                 "context_window_k": 1024,
-                "max_model_len": 8000,
+                "max_model_len": 1048576,
                 "tokens_per_second": 25,
                 "input_price_per_million_tokens": 1.4,
                 "output_price_per_million_tokens": 4.4,

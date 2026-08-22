@@ -133,7 +133,15 @@
     <button id="btn-theme">Theme: Light</button>
   </div>
   <p class="provider-link"><a href="https://tokenfactory.nebius.com/" target="_blank" rel="noopener">https://tokenfactory.nebius.com/</a></p>
-  <p class="data-link">Data: <a href="model-info.json" target="_blank" rel="noopener"><code>model-info.json</code></a> (updated <span id="updated-at"></span>)</p>
+  <p class="data-link">
+    Repo:
+    <a href="https://github.com/sujee/practical-llm-evals/tree/main/viz-tf-models/providers/nebius-token-factory/model-visualizer" target="_blank" rel="noopener"><code>model-visualizer</code></a>
+    <span class="sep">&middot;</span>
+    <a href="README.md" target="_blank" rel="noopener"><code>README.md</code></a>
+    <span class="sep">&middot;</span>
+    Data: <a href="model-info.json" target="_blank" rel="noopener"><code>model-info.json</code></a>
+    (updated <span id="updated-at"></span>)
+  </p>
   <nav class="toc">
     <span class="toc-label">Jump to:</span>
     <a href="#pricing">Intelligence and Pricing</a><span class="sep">|</span><a href="#release">Release Time</a><span class="sep">|</span><a href="#context">Context Frontier</a>
@@ -158,7 +166,7 @@
   <div id="error">
     Could not load <code>model-info.json</code>. If you opened this file directly,
     serve the folder over HTTP instead, e.g. <code>python3 -m http.server</code>,
-    then visit <code>http://localhost:8000/inference/nebius-token-factory/</code>.
+    then visit <code>http://localhost:8000/providers/nebius-token-factory/model-visualizer/</code>.
   </div>
   <div id="chart"></div>
 

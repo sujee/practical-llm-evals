@@ -1,7 +1,7 @@
 {
   "provider": "Nebius Token Factory",
   "provider_url": "https://tokenfactory.nebius.com/",
-  "updated_at": "2026-08-08",
+  "updated_at": "2026-08-21",
   "comment": "Prices in USD per 1M tokens. Blended pricing = 0.75 x input + 0.25 x output (3:1 mix). param_count in billions. context_window_K in K tokens (1K = 1024 tokens).  Only showing latest models. AA Intelligence Index is measured on max/high reasoning. (higher is better).",
   "models": [
     {
@@ -27,7 +27,7 @@
     {
       "model_id": "moonshotai/Kimi-K3",
       "model_release_date": "2026-07-16",
-      "aa_intelligence_index": 57,
+      "aa_intelligence_index": 60,
       "param_count": 2800,
       "context_window_K": 1024,
       "price_input_1m": 3.0,
@@ -37,7 +37,7 @@
     {
       "model_id": "zai-org/GLM-5.2",
       "model_release_date": "2026-06-16",
-      "aa_intelligence_index": 51,
+      "aa_intelligence_index": 53,
       "param_count": 753,
       "context_window_K": 1024,
       "price_input_1m": 1.4,
@@ -47,7 +47,7 @@
     {
       "model_id": "moonshotai/Kimi-K2.7-Code",
       "model_release_date": "2026-06-12",
-      "aa_intelligence_index": 42,
+      "aa_intelligence_index": 43,
       "param_count": 1000,
       "context_window_K": 256,
       "price_input_1m": 0.95,
@@ -67,7 +67,7 @@
     {
       "model_id": "MiniMaxAI/MiniMax-M3",
       "model_release_date": "2026-06-01",
-      "aa_intelligence_index": 44,
+      "aa_intelligence_index": 45,
       "param_count": 428,
       "context_window_K": 1024,
       "price_input_1m": 0.3,
@@ -75,19 +75,9 @@
       "pricing_blended_1m": 0.525
     },
     {
-      "model_id": "nvidia/Nemotron-3-Nano-Omni",
-      "model_release_date": "2026-04-28",
-      "aa_intelligence_index": 15,
-      "param_count": 30,
-      "context_window_K": 256,
-      "price_input_1m": 0.06,
-      "price_output_1m": 0.24,
-      "pricing_blended_1m": 0.105
-    },
-    {
       "model_id": "deepseek-ai/DeepSeek-V4-Pro",
       "model_release_date": "2026-04-24",
-      "aa_intelligence_index": 44,
+      "aa_intelligence_index": 53,
       "param_count": 1600,
       "context_window_K": 1024,
       "price_input_1m": 1.75,
@@ -97,7 +87,7 @@
     {
       "model_id": "moonshotai/Kimi-K2.6",
       "model_release_date": "2026-04-20",
-      "aa_intelligence_index": 44,
+      "aa_intelligence_index": 35,
       "param_count": 1000,
       "context_window_K": 256,
       "price_input_1m": 0.95,
@@ -105,19 +95,9 @@
       "pricing_blended_1m": 1.7125
     },
     {
-      "model_id": "MiniMaxAI/MiniMax-M2.5",
-      "model_release_date": "2026-03-18",
-      "aa_intelligence_index": 34,
-      "param_count": 230,
-      "context_window_K": 200,
-      "price_input_1m": 0.3,
-      "price_output_1m": 1.2,
-      "pricing_blended_1m": 0.525
-    },
-    {
       "model_id": "nvidia/nemotron-3-super-120b-a12b",
       "model_release_date": "2026-03-11",
-      "aa_intelligence_index": 25,
+      "aa_intelligence_index": 26,
       "param_count": 120.6,
       "context_window_K": 256,
       "price_input_1m": 0.3,
@@ -133,16 +113,6 @@
       "price_input_1m": 0.6,
       "price_output_1m": 3.6,
       "pricing_blended_1m": 1.35
-    },
-    {
-      "model_id": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
-      "model_release_date": "2025-12-15",
-      "aa_intelligence_index": 14,
-      "param_count": 31.6,
-      "context_window_K": 256,
-      "price_input_1m": 0.06,
-      "price_output_1m": 0.24,
-      "pricing_blended_1m": 0.105
     },
     {
       "model_id": "openai/gpt-oss-120b",

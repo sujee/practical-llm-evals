@@ -4,11 +4,11 @@ Some visualizations for Token Factory models.
 
 ## 📊 Visualizations!
 
-[All visualizations — view live!](https://sujee.github.io/practical-llm-evals/inference/nebius-token-factory/)
+[All visualizations — view live!](https://sujee.github.io/practical-llm-evals/providers/nebius-token-factory/model-visualizer/index.html)
 
-- 📈 [Intelligence and Pricing](https://sujee.github.io/practical-llm-evals/inference/nebius-token-factory/#pricing) — AA Intelligence Index vs price 
-- 📅 [Release Time line](https://sujee.github.io/practical-llm-evals/inference/nebius-token-factory/#release) — AA Intelligence Index vs model release date
-- 🪜 [Context Frontier](https://sujee.github.io/practical-llm-evals/inference/nebius-token-factory/#context) — largest context window available over time
+- 📈 [Intelligence and Pricing](https://sujee.github.io/practical-llm-evals/providers/nebius-token-factory/model-visualizer/#pricing) — AA Intelligence Index vs price 
+- 📅 [Release Time line](https://sujee.github.io/practical-llm-evals/providers/nebius-token-factory/model-visualizer/#release) — AA Intelligence Index vs model release date
+- 🪜 [Context Frontier](https://sujee.github.io/practical-llm-evals/providers/nebius-token-factory/model-visualizer/#context) — largest context window available over time
 
 
 ## Getting Model Info
@@ -45,6 +45,6 @@ To test locally:
 python -m http.server
 ```
 
-And go to url : http://localhost:8000/
+And go to url : http://localhost:8000/providers/nebius-token-factory/model-visualizer/
 
 (if you just open the index.html in the browser, it may not work well!)
