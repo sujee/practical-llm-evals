@@ -87,6 +87,7 @@
 
   let priceMetric = 'pricing_blended_1m';
   let minIntel = Math.min(...models.map(m => m.aa_intelligence_index));
+  let minContext = 0; // set after slider is configured so defaults reflect the snap grid
   let showLabels = true;
   let sizeByParams = true;
   let showLabels2 = true;
@@ -132,7 +133,7 @@
         color: theme === 'dark' ? '#8b94a3' : '#666',
         formatter: p => p.data.model.short
       },
-      data: models.filter(m => m.model_id.startsWith(org + '/') && m.aa_intelligence_index >= minIntel).map(m => ({
+      data: models.filter(m => m.model_id.startsWith(org + '/') && m.aa_intelligence_index >= minIntel && m.context_window_K >= minContext).map(m => ({
         value: [m[priceMetric], m.aa_intelligence_index],
         model: m
       }))
@@ -314,6 +315,8 @@
   const selMetric = document.getElementById('sel-metric');
   const sliderIntel = document.getElementById('slider-intel');
   const intelVal = document.getElementById('intel-val');
+  const sliderCtx = document.getElementById('slider-ctx');
+  const ctxVal = document.getElementById('ctx-val');
   const btnLabels = document.getElementById('btn-labels');
   const btnBubbles = document.getElementById('btn-bubbles');
   const btnLabels2 = document.getElementById('btn-labels2');
@@ -374,6 +377,24 @@
   sliderIntel.addEventListener('input', () => {
     minIntel = +sliderIntel.value;
     intelVal.textContent = minIntel;
+    chart.setOption(buildOption());
+  });
+
+  // Context slider: log-scale ticks where each unit = a doubling, so 128K, 256K, 512K, 1M, ...
+  // land on integer ticks and each step visibly drops the next bucket of models.
+  const ctxValues = models.map(m => m.context_window_K);
+  const ctxMinPow = Math.floor(Math.log2(Math.min(...ctxValues)));
+  const ctxMaxPow = Math.ceil(Math.log2(Math.max(...ctxValues)));
+  sliderCtx.min = ctxMinPow;
+  sliderCtx.max = ctxMaxPow;
+  sliderCtx.step = 1;
+  sliderCtx.value = sliderCtx.min; // default to minimum so all models show
+  minContext = Math.pow(2, +sliderCtx.value);
+  ctxVal.textContent = fmtCtx(minContext);
+
+  sliderCtx.addEventListener('input', () => {
+    minContext = Math.pow(2, +sliderCtx.value);
+    ctxVal.textContent = fmtCtx(minContext);
     chart.setOption(buildOption());
   });
 
