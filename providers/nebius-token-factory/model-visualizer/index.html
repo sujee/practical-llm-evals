@@ -102,6 +102,17 @@
     border-color: var(--text);
   }
   .controls label { font-size: 0.85rem; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  /* Stacked variant: label text on row 1, slider/select on row 2 */
+  .controls.stacked { align-items: stretch; }
+  .controls.stacked label {
+    flex-direction: column; align-items: flex-start; gap: 5px;
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    background: var(--card);
+    padding: 8px 12px 10px;
+  }
+  .controls.stacked button { align-self: center; }
+  .control-input { display: inline-flex; align-items: center; gap: 6px; height: 31px; }
   .controls input[type="range"] { width: 140px; cursor: pointer; accent-color: var(--text); }
   .controls .slider-val { min-width: 2ch; font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
   #chart, #chart2, #chart3 {
@@ -148,21 +159,27 @@
   </nav>
   <h2 id="pricing">Intelligence and Pricing</h2>
   <p class="subtitle">AA Intelligence Index vs price ($ per 1M tokens). Blended pricing = 0.75 &times; input + 0.25 &times; output (3:1 mix). Bubble area is proportional to parameter count. Hover a point for full model details.<br><span class="legend-hint">Click legend entries to show/hide model families. <kbd>Shift</kbd>+click a family to isolate it; <kbd>Shift</kbd>+click again to restore all.</span></p>
-  <div class="controls">
+  <div class="controls stacked">
     <label>X axis:
-      <select id="sel-metric">
-        <option value="pricing_blended_1m" selected>Pricing blended (1M)</option>
-        <option value="price_input_1m">Pricing input (1M)</option>
-        <option value="price_output_1m">Pricing output (1M)</option>
-      </select>
+      <span class="control-input">
+        <select id="sel-metric">
+          <option value="pricing_blended_1m" selected>Pricing blended (1M)</option>
+          <option value="price_input_1m">Pricing input (1M)</option>
+          <option value="price_output_1m">Pricing output (1M)</option>
+        </select>
+      </span>
     </label>
     <label>Y axis: intelligence &ge;
-      <input type="range" id="slider-intel" step="1">
-      <span class="slider-val" id="intel-val"></span>
+      <span class="control-input">
+        <input type="range" id="slider-intel" step="1">
+        <span class="slider-val" id="intel-val"></span>
+      </span>
     </label>
     <label>Context window &ge;
-      <input type="range" id="slider-ctx" step="1">
-      <span class="slider-val" id="ctx-val"></span>
+      <span class="control-input">
+        <input type="range" id="slider-ctx" step="1">
+        <span class="slider-val" id="ctx-val"></span>
+      </span>
     </label>
     <button id="btn-labels" class="active">Labels: ON</button>
     <button id="btn-bubbles" class="active">Size &prop; params: ON</button>
