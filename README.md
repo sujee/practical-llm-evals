@@ -6,7 +6,7 @@ Practical benchmarks, performance tests, and experiential evaluations for open m
 
 Inference benchmarks and model visualizations.
 
-- 📊 [Nebius Token Factory Models](./providers/nebius-token-factory/model-visualizer/index.html) — interactive visualization of Token Factory models.
+- 📊 [Nebius Token Factory Models](https://sujee.github.io/practical-llm-evals/providers/nebius-token-factory/model-visualizer/) — interactive visualization of Token Factory models.
 
 
 ## 🎉 Fun Benchmarks & Projects
