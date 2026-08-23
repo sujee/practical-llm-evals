@@ -1,8 +1,13 @@
 const form = document.querySelector("#connection-form");
+const tabs = [...document.querySelectorAll('[role="tab"]')];
+const tabPanels = [...document.querySelectorAll('[role="tabpanel"]')];
+const providerSelect = document.querySelector("#provider");
 const endpointInput = document.querySelector("#endpoint");
+const endpointHint = document.querySelector("#endpoint-hint");
 const apiKeyInput = document.querySelector("#api-key");
 const toggleKeyButton = document.querySelector("#toggle-key");
 const loadButton = document.querySelector("#load-button");
+const connectionControls = [providerSelect, endpointInput, apiKeyInput, toggleKeyButton];
 const status = document.querySelector("#status");
 const results = document.querySelector("#results");
 const modelCount = document.querySelector("#model-count");
@@ -10,7 +15,18 @@ const tableHead = document.querySelector("#models-head");
 const tableBody = document.querySelector("#models-body");
 const exportModelsCsvButton = document.querySelector("#export-models-csv");
 const exportModelsJsonButton = document.querySelector("#export-models-json");
-const benchmarkSection = document.querySelector("#benchmark");
+const selectNewestModelsButton = document.querySelector("#select-newest-models");
+const selectIntelligentModelsButton = document.querySelector("#select-intelligent-models");
+const selectAllModelsButton = document.querySelector("#select-all-models");
+const invertModelSelectionButton = document.querySelector("#invert-model-selection");
+const selectNoModelsButton = document.querySelector("#select-no-models");
+const modelSelectionButtons = [
+  selectNewestModelsButton,
+  selectIntelligentModelsButton,
+  selectAllModelsButton,
+  invertModelSelectionButton,
+  selectNoModelsButton,
+];
 const benchmarkForm = document.querySelector("#benchmark-form");
 const runsInput = document.querySelector("#runs");
 const maxTokensInput = document.querySelector("#max-tokens");
@@ -21,15 +37,14 @@ const logConsoleInput = document.querySelector("#log-console");
 const disableThinkingInput = document.querySelector("#disable-thinking");
 const fixedOutputInput = document.querySelector("#fixed-output");
 const requireServerTokensInput = document.querySelector("#require-server-tokens");
+const benchmarkConfigInputs = [...benchmarkForm.querySelectorAll("input, textarea")];
+const requestTemplateCode = document.querySelector("#request-template-code");
 const sampleRequestNote = document.querySelector("#sample-request-note");
 const sampleRequestCode = document.querySelector("#sample-request-code");
 const sampleResponseNote = document.querySelector("#sample-response-note");
 const sampleResponseCode = document.querySelector("#sample-response-code");
 const sampleOutputNote = document.querySelector("#sample-output-note");
 const sampleOutputCode = document.querySelector("#sample-output-code");
-const selectionCount = document.querySelector("#selection-count");
-const selectAllButton = document.querySelector("#select-all");
-const selectNoneButton = document.querySelector("#select-none");
 const runButton = document.querySelector("#run-button");
 const cancelButton = document.querySelector("#cancel-button");
 const benchmarkStatus = document.querySelector("#benchmark-status");
@@ -49,6 +64,25 @@ const showAllColumnsButton = document.querySelector("#show-all-columns");
 const benchmarkColumnKeys = benchmarkSortHeaders.map((header) => header.dataset.benchmarkColumn);
 const benchmarkColumnPreferenceKey = "quick-llm-bench:benchmark-columns:v7";
 
+const endpointPresets = {
+  nebius: {
+    endpoint: "https://api.tokenfactory.nebius.com/v1",
+    hint: "Nebius OpenAI-compatible API base URL.",
+  },
+  openai: {
+    endpoint: "https://api.openai.com/v1",
+    hint: "OpenAI API base URL.",
+  },
+  together: {
+    endpoint: "https://api.together.ai/v1",
+    hint: "Together AI OpenAI-compatible API base URL.",
+  },
+  baseten: {
+    endpoint: "https://inference.baseten.co/v1",
+    hint: "Baseten OpenAI-compatible inference API base URL.",
+  },
+};
+
 const columns = [
   { key: "selected", label: "Run" },
   { key: "modelId", label: "Model ID" },
@@ -65,12 +99,60 @@ let sortState = { key: "releaseDate", direction: "descending" };
 let benchmarkRun = null;
 let benchmarkAbortController = null;
 let benchmarkStartedAtMs = null;
+let modelsLoading = false;
 let benchmarkSortState = { key: "tpsMedian", direction: "descending" };
 let visibleBenchmarkColumns = loadVisibleBenchmarkColumns();
 if (!visibleBenchmarkColumns.has(benchmarkSortState.key)) {
   benchmarkSortState = { key: [...visibleBenchmarkColumns][0], direction: "ascending" };
 }
 
+providerSelect.addEventListener("change", () => {
+  const preset = endpointPresets[providerSelect.value];
+  if (preset) {
+    endpointInput.value = preset.endpoint;
+    endpointHint.textContent = preset.hint;
+    renderRequestTemplate();
+    return;
+  }
+  endpointHint.textContent = "Enter a base URL or the full /models URL.";
+  endpointInput.focus();
+  endpointInput.select();
+  renderRequestTemplate();
+});
+
+endpointInput.addEventListener("input", () => {
+  const normalizedEndpoint = endpointInput.value.trim().replace(/\/+$/, "");
+  const matchingPreset = Object.entries(endpointPresets).find(([, preset]) => (
+    preset.endpoint === normalizedEndpoint
+  ));
+  if (matchingPreset) {
+    providerSelect.value = matchingPreset[0];
+    endpointHint.textContent = matchingPreset[1].hint;
+    renderRequestTemplate();
+    return;
+  }
+  providerSelect.value = "custom";
+  endpointHint.textContent = "Custom OpenAI-compatible API base URL.";
+  renderRequestTemplate();
+});
+
+tabs.forEach((tab) => {
+  tab.addEventListener("click", () => setActiveTab(tab));
+  tab.addEventListener("keydown", (event) => {
+    const currentIndex = tabs.indexOf(tab);
+    const keyTargets = {
+      ArrowLeft: (currentIndex - 1 + tabs.length) % tabs.length,
+      ArrowRight: (currentIndex + 1) % tabs.length,
+      Home: 0,
+      End: tabs.length - 1,
+    };
+    if (!(event.key in keyTargets)) return;
+    event.preventDefault();
+    const nextTab = tabs[keyTargets[event.key]];
+    setActiveTab(nextTab);
+    nextTab.focus();
+  });
+});
 toggleKeyButton.addEventListener("click", () => {
   const shouldShow = apiKeyInput.type === "password";
   apiKeyInput.type = shouldShow ? "text" : "password";
@@ -78,8 +160,11 @@ toggleKeyButton.addEventListener("click", () => {
   toggleKeyButton.setAttribute("aria-label", `${shouldShow ? "Hide" : "Show"} API key`);
 });
 
-selectAllButton.addEventListener("click", () => setAllModelsSelected(true));
-selectNoneButton.addEventListener("click", () => setAllModelsSelected(false));
+selectNewestModelsButton.addEventListener("click", () => selectTopModels("releaseDate", 5));
+selectIntelligentModelsButton.addEventListener("click", () => selectTopModels("aaIndex", 5));
+selectAllModelsButton.addEventListener("click", () => setAllModelsSelected(true));
+invertModelSelectionButton.addEventListener("click", invertModelSelection);
+selectNoModelsButton.addEventListener("click", () => setAllModelsSelected(false));
 cancelButton.addEventListener("click", () => benchmarkAbortController?.abort());
 exportCsvButton.addEventListener("click", exportBenchmarkCsv);
 exportJsonButton.addEventListener("click", exportBenchmarkJson);
@@ -98,6 +183,9 @@ showAllColumnsButton.addEventListener("click", () => {
   renderBenchmarkResults();
 });
 renderMethodologySample();
+renderRequestTemplate();
+[promptInput, maxTokensInput].forEach((input) => input.addEventListener("input", renderRequestTemplate));
+[disableThinkingInput, fixedOutputInput].forEach((input) => input.addEventListener("change", renderRequestTemplate));
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -106,13 +194,12 @@ form.addEventListener("submit", async (event) => {
 
   try {
     const modelReference = await loadModelReference();
-    const url = buildModelsUrl(endpointInput.value);
+    const url = buildModelsUrl(endpointInput.value, providerSelect.value);
     const response = await fetch(url, {
       method: "GET",
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${apiKeyInput.value.trim()}`,
-      },
+      headers: buildApiHeaders(apiKeyInput.value.trim(), {
+        accept: "application/json",
+      }),
     });
 
     const payload = await readResponse(response);
@@ -134,7 +221,6 @@ form.addEventListener("submit", async (event) => {
     sortState = { key: "releaseDate", direction: "descending" };
     renderTable();
     results.hidden = false;
-    benchmarkSection.hidden = false;
     benchmarkResults.hidden = true;
     benchmarkRun = null;
     setBenchmarkStatus("");
@@ -149,8 +235,13 @@ form.addEventListener("submit", async (event) => {
     );
     results.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
+    models = [];
+    benchmarkRun = null;
+    renderTable();
+    updateSelectionCount();
     results.hidden = true;
-    benchmarkSection.hidden = true;
+    benchmarkResults.hidden = true;
+    setBenchmarkStatus("");
     const corsHint = error instanceof TypeError ? " The endpoint may not allow browser requests (CORS)." : "";
     setStatus(`${error.message || "Unable to load models."}${corsHint}`, true);
   } finally {
@@ -178,6 +269,7 @@ benchmarkForm.addEventListener("submit", async (event) => {
     requireServerTokenCounts: requireServerTokensInput.checked,
   };
   const connection = {
+    provider: providerSelect.value,
     endpoint: endpointInput.value,
     apiKey: apiKeyInput.value.trim(),
   };
@@ -192,6 +284,7 @@ benchmarkForm.addEventListener("submit", async (event) => {
   benchmarkRun = {
     status: "running",
     startedAt: new Date().toISOString(),
+    provider: connection.provider,
     endpoint: buildChatCompletionsUrl(endpointInput.value),
     environment: {
       userAgent: navigator.userAgent,
@@ -256,14 +349,40 @@ benchmarkForm.addEventListener("submit", async (event) => {
   }
 });
 
-function buildModelsUrl(rawEndpoint) {
-  const url = new URL(rawEndpoint.trim());
-  url.pathname = url.pathname.replace(/\/+$/, "");
-  if (!url.pathname.endsWith("/models")) {
-    url.pathname = `${url.pathname}/models`;
-  }
-  url.searchParams.set("verbose", "true");
+function setActiveTab(activeTab, moveFocus = false) {
+  tabs.forEach((tab) => {
+    const isActive = tab === activeTab;
+    tab.setAttribute("aria-selected", String(isActive));
+    tab.tabIndex = isActive ? 0 : -1;
+  });
+  tabPanels.forEach((panel) => {
+    panel.hidden = panel.id !== activeTab.getAttribute("aria-controls");
+  });
+  if (moveFocus) activeTab.focus();
+}
+
+function buildModelsUrl(rawEndpoint, provider) {
+  const url = buildApiUrl(rawEndpoint, "models");
+  if (provider === "nebius") url.searchParams.set("verbose", "true");
   return url.toString();
+}
+
+function buildApiUrl(rawEndpoint, resourcePath) {
+  const url = new URL(rawEndpoint.trim());
+  const basePath = url.pathname
+    .replace(/\/(models|chat\/completions)\/?$/i, "")
+    .replace(/\/+$/, "");
+  url.pathname = `${basePath}/${resourcePath}`;
+  url.hash = "";
+  return url;
+}
+
+function buildApiHeaders(apiKey, { accept, contentType } = {}) {
+  const headers = {};
+  if (accept) headers.Accept = accept;
+  if (contentType) headers["Content-Type"] = contentType;
+  headers.Authorization = `Bearer ${apiKey}`;
+  return headers;
 }
 
 async function readResponse(response) {
@@ -511,15 +630,14 @@ function renderTable() {
     const headerCell = document.createElement("th");
     headerCell.scope = "col";
     headerCell.classList.toggle("sorted-column", sortState.key === key);
+    headerCell.setAttribute(
+      "aria-sort",
+      sortState.key === key ? sortState.direction : "none",
+    );
 
     const sortButton = document.createElement("button");
     sortButton.type = "button";
     sortButton.className = "sort-button";
-    sortButton.dataset.column = key;
-    sortButton.setAttribute(
-      "aria-sort",
-      sortState.key === key ? sortState.direction : "none",
-    );
 
     const label = document.createElement("span");
     label.textContent = columnLabel;
@@ -549,7 +667,7 @@ function renderTable() {
         checkbox.type = "checkbox";
         checkbox.className = "model-select";
         checkbox.checked = model.selected;
-        checkbox.disabled = benchmarkAbortController != null;
+        checkbox.disabled = modelsLoading || benchmarkAbortController != null;
         checkbox.setAttribute("aria-label", `Select ${model.modelId} for benchmarking`);
         checkbox.addEventListener("change", () => {
           model.selected = checkbox.checked;
@@ -584,15 +702,39 @@ function getSortedModels() {
 }
 
 function setAllModelsSelected(isSelected) {
-  models.forEach((model) => { model.selected = isSelected; });
+  applyModelSelection(() => isSelected);
+}
+
+function selectTopModels(key, limit) {
+  const selectedModels = new Set(
+    models
+      .filter((model) => !isMissing(model[key]))
+      .sort((left, right) => (
+        compareValues(right[key], left[key])
+        || compareValues(left.modelId, right.modelId)
+      ))
+      .slice(0, limit),
+  );
+  applyModelSelection((model) => selectedModels.has(model));
+}
+
+function invertModelSelection() {
+  applyModelSelection((model) => !model.selected);
+}
+
+function applyModelSelection(shouldSelect) {
+  models.forEach((model, index) => { model.selected = shouldSelect(model, index); });
   renderTable();
   updateSelectionCount();
 }
 
 function updateSelectionCount() {
   const count = models.filter((model) => model.selected).length;
-  selectionCount.textContent = `${count} selected`;
-  runButton.disabled = count === 0 || benchmarkAbortController != null;
+  const hasModels = models.length > 0;
+  if (hasModels) {
+    setStatus(`Selected ${count} model${count === 1 ? "" : "s"}`);
+  }
+  runButton.disabled = count === 0 || modelsLoading || benchmarkAbortController != null;
 }
 
 async function benchmarkModel(result, config, signal, connection) {
@@ -659,42 +801,18 @@ async function runStreamingCompletion(modelId, config, outerSignal, includeUsage
   const startedAt = performance.now();
 
   try {
-    const messages = buildBenchmarkMessages(config.prompt);
-    const body = {
-      model: modelId,
-      messages,
-      stream: true,
-      temperature: 0,
-      top_p: 1,
-      max_tokens: config.maxTokens,
-    };
-    if (includeUsage) body.stream_options = { include_usage: true };
-    if (config.disableThinking) {
-      body.chat_template_kwargs = { enable_thinking: false };
-    }
-    if (config.fixedOutput) {
-      body.min_tokens = config.maxTokens;
-      body.ignore_eos = true;
-    }
+    const body = buildBenchmarkRequestBody(modelId, config, includeUsage);
 
     const requestUrl = buildChatCompletionsUrl(connection.endpoint);
-    const rawRequestText = [
-      `POST ${requestUrl}`,
-      "Accept: text/event-stream",
-      "Content-Type: application/json",
-      "Authorization: Bearer [REDACTED]",
-      "",
-      JSON.stringify(body, null, 2),
-    ].join("\n");
+    const rawRequestText = formatBenchmarkRequest(requestUrl, body);
     logBenchmarkRaw(config, `${modelId} · ${runLabel} · RAW REQUEST`, rawRequestText);
 
     const response = await fetch(requestUrl, {
       method: "POST",
-      headers: {
-        Accept: "text/event-stream",
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${connection.apiKey}`,
-      },
+      headers: buildApiHeaders(connection.apiKey, {
+        accept: "text/event-stream",
+        contentType: "application/json",
+      }),
       body: JSON.stringify(body),
       signal: requestController.signal,
     });
@@ -925,12 +1043,7 @@ class HttpError extends Error {
 }
 
 function buildChatCompletionsUrl(rawEndpoint) {
-  const url = new URL(rawEndpoint.trim());
-  url.pathname = url.pathname
-    .replace(/\/(models|chat\/completions)\/?$/i, "")
-    .replace(/\/+$/, "");
-  url.pathname = `${url.pathname}/chat/completions`;
-  url.search = "";
+  const url = buildApiUrl(rawEndpoint, "chat/completions");
   return url.toString();
 }
 
@@ -1226,8 +1339,57 @@ function percentile(values, probability) {
   return sorted[Math.max(0, Math.ceil(probability * sorted.length) - 1)];
 }
 
+function buildBenchmarkRequestBody(modelId, config, includeUsage = true) {
+  const body = {
+    model: modelId,
+    messages: buildBenchmarkMessages(config.prompt),
+    stream: true,
+    temperature: 0,
+    top_p: 1,
+    max_tokens: config.maxTokens,
+  };
+  if (includeUsage) body.stream_options = { include_usage: true };
+  if (config.disableThinking) {
+    body.chat_template_kwargs = { enable_thinking: false };
+  }
+  if (config.fixedOutput) {
+    body.min_tokens = config.maxTokens;
+    body.ignore_eos = true;
+  }
+  return body;
+}
+
+function formatBenchmarkRequest(requestUrl, body) {
+  const headers = buildApiHeaders("[REDACTED]", {
+    accept: "text/event-stream",
+    contentType: "application/json",
+  });
+  return [
+    `POST ${requestUrl}`,
+    ...Object.entries(headers).map(([name, value]) => `${name}: ${value}`),
+    "",
+    JSON.stringify(body, null, 2),
+  ].join("\n");
+}
+
 function buildBenchmarkMessages(prompt) {
   return [{ role: "user", content: prompt }];
+}
+
+function renderRequestTemplate() {
+  try {
+    const config = {
+      prompt: promptInput.value.trim(),
+      maxTokens: clampInteger(maxTokensInput.value, 32, 4096),
+      disableThinking: disableThinkingInput.checked,
+      fixedOutput: fixedOutputInput.checked,
+    };
+    const requestUrl = buildChatCompletionsUrl(endpointInput.value);
+    const body = buildBenchmarkRequestBody("<selected-model>", config);
+    requestTemplateCode.textContent = formatBenchmarkRequest(requestUrl, body);
+  } catch {
+    requestTemplateCode.textContent = "Enter a valid API endpoint to preview the benchmark request.";
+  }
 }
 
 function renderMethodologySample() {
@@ -1298,16 +1460,12 @@ function formatCost(value) {
 function setBenchmarkRunning(isRunning) {
   runButton.disabled = isRunning || !models.some((model) => model.selected);
   runButton.firstElementChild.textContent = isRunning ? "Running…" : "Run selected";
+  runButton.setAttribute("aria-busy", String(isRunning));
   cancelButton.hidden = !isRunning;
-  selectAllButton.disabled = isRunning;
-  selectNoneButton.disabled = isRunning;
+  modelSelectionButtons.forEach((button) => { button.disabled = isRunning; });
   loadButton.disabled = isRunning;
-  endpointInput.disabled = isRunning;
-  apiKeyInput.disabled = isRunning;
-  logConsoleInput.disabled = isRunning;
-  disableThinkingInput.disabled = isRunning;
-  fixedOutputInput.disabled = isRunning;
-  requireServerTokensInput.disabled = isRunning;
+  connectionControls.forEach((control) => { control.disabled = isRunning; });
+  benchmarkConfigInputs.forEach((control) => { control.disabled = isRunning; });
   tableBody.querySelectorAll(".model-select").forEach((checkbox) => { checkbox.disabled = isRunning; });
 }
 
@@ -1336,7 +1494,7 @@ function exportModelsJson() {
   ));
   const payload = {
     exportedAt: new Date().toISOString(),
-    endpoint: buildModelsUrl(endpointInput.value),
+    endpoint: buildModelsUrl(endpointInput.value, providerSelect.value),
     sort: sortState,
     modelCount: exportedModels.length,
     models: exportedModels,
@@ -1497,8 +1655,16 @@ function isMissing(value) {
 }
 
 function setLoading(isLoading) {
+  modelsLoading = isLoading;
   loadButton.disabled = isLoading;
   loadButton.firstElementChild.textContent = isLoading ? "Loading…" : "Load models";
+  loadButton.setAttribute("aria-busy", String(isLoading));
+  connectionControls.forEach((control) => { control.disabled = isLoading; });
+  modelSelectionButtons.forEach((button) => { button.disabled = isLoading; });
+  tableBody.querySelectorAll(".model-select").forEach((checkbox) => { checkbox.disabled = isLoading; });
+  runButton.disabled = isLoading
+    || benchmarkAbortController != null
+    || !models.some((model) => model.selected);
 }
 
 function setStatus(message, isError = false) {

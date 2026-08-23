@@ -5,31 +5,71 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Inspect models exposed by an OpenAI-compatible API endpoint."
+      content="Measure endpoint responsiveness and token delivery speed across language models."
     />
     <title>LLM Quick Bench — Streaming Performance</title>
     <link rel="stylesheet" href="styles.css" />
-    <script src="speed-test1.js" defer></script>
+    <script src="raw-speed-test1.js" defer></script>
   </head>
   <body>
     <main class="shell">
       <header class="hero">
-        <p class="eyebrow">Streaming performance lab</p>
         <h1>LLM Quick Bench</h1>
-        <p class="intro">
-          Compare time to first token and generation throughput across models.
-        </p>
       </header>
 
-      <section class="connection-card" aria-label="API connection">
+      <nav class="tabs" role="tablist" aria-label="Benchmark sections">
+        <button
+          id="models-tab"
+          class="tab-button"
+          type="button"
+          role="tab"
+          aria-selected="true"
+          aria-controls="models-panel"
+          tabindex="0"
+        >
+          Models
+        </button>
+        <button
+          id="raw-speed-test1-tab"
+          class="tab-button"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="raw-speed-test1-panel"
+          tabindex="-1"
+        >
+          Raw Speed Test 1
+        </button>
+      </nav>
+
+      <div id="status" class="status global-status" role="status" aria-live="polite"></div>
+
+      <div
+        id="models-panel"
+        class="tab-panel"
+        role="tabpanel"
+        aria-labelledby="models-tab"
+      >
+
+      <section class="connection-card" aria-labelledby="connection-heading">
         <div class="section-heading">
-          <div>
-            <p class="step">01 / Connect</p>
-          </div>
+          <h2 id="connection-heading">Connection</h2>
           <span class="privacy-note">Credentials stay in this browser tab</span>
         </div>
 
         <form id="connection-form">
+          <div class="field provider-field">
+            <label for="provider">Provider</label>
+            <select id="provider" name="provider">
+              <option value="nebius" selected>Nebius Token Factory</option>
+              <option value="openai">OpenAI</option>
+              <option value="together">Together AI</option>
+              <option value="baseten">Baseten</option>
+              <option value="custom">Custom OpenAI-compatible</option>
+            </select>
+            <p class="hint">Choose a preset or enter an OpenAI-compatible URL.</p>
+          </div>
+
           <div class="field endpoint-field">
             <label for="endpoint">API endpoint</label>
             <input
@@ -41,7 +81,7 @@
               spellcheck="false"
               required
             />
-            <p class="hint">Enter a base URL or the full <code>/models</code> URL.</p>
+            <p id="endpoint-hint" class="hint">Nebius OpenAI-compatible API base URL.</p>
           </div>
 
           <div class="field key-field">
@@ -69,20 +109,25 @@
           </button>
         </form>
 
-        <div id="status" class="status" role="status" aria-live="polite"></div>
       </section>
 
       <section id="results" class="results" aria-labelledby="results-heading" hidden>
         <div class="section-heading results-heading">
-          <div>
-            <p class="step">02 / Select</p>
-            <h2 id="results-heading">Available models</h2>
-          </div>
+          <h2 id="results-heading">Available models</h2>
           <div class="results-actions">
             <span id="model-count" class="count"></span>
             <button id="export-models-csv" class="secondary-button" type="button">Export CSV</button>
             <button id="export-models-json" class="secondary-button" type="button">Export JSON</button>
           </div>
+        </div>
+
+        <div class="model-selection-actions" aria-label="Model selection shortcuts">
+          <span class="selection-label">Quick select</span>
+          <button id="select-newest-models" class="secondary-button" type="button">Select 5 newest</button>
+          <button id="select-intelligent-models" class="secondary-button" type="button">Select top 5 intelligent</button>
+          <button id="select-all-models" class="secondary-button" type="button">Select all</button>
+          <button id="invert-model-selection" class="secondary-button" type="button">Invert selection</button>
+          <button id="select-no-models" class="secondary-button" type="button">Select none</button>
         </div>
 
         <div class="table-frame">
@@ -95,25 +140,38 @@
           Choose models to benchmark. Select any header to sort; blended pricing weights three input tokens for every output token.
         </p>
       </section>
+      </div>
 
-      <section id="benchmark" class="benchmark" aria-labelledby="benchmark-heading" hidden>
-        <div class="section-heading benchmark-heading">
-          <div>
-            <p class="step">03 / Benchmark</p>
-            <h2 id="benchmark-heading">Streaming benchmark</h2>
+      <div
+        id="raw-speed-test1-panel"
+        class="tab-panel"
+        role="tabpanel"
+        aria-labelledby="raw-speed-test1-tab"
+        hidden
+      >
+      <section id="benchmark" class="benchmark" aria-label="Raw Speed Test 1 benchmark">
+        <section class="methodology-overview" aria-labelledby="methodology-heading">
+          <h3 id="methodology-heading">What Raw Speed Test 1 measures</h3>
+          <div class="methodology-metrics">
+            <div>
+              <strong>Time to first token</strong>
+              <span>Delay from request dispatch to the first generated token.</span>
+            </div>
+            <div>
+              <strong>Token throughput</strong>
+              <span>Completion tokens delivered per second after generation begins.</span>
+            </div>
+            <div>
+              <strong>End-to-end latency</strong>
+              <span>Total time from request dispatch until the response stream closes.</span>
+            </div>
           </div>
-          <span id="selection-count" class="count">0 selected</span>
-        </div>
-
-        <div class="selection-actions" aria-label="Model selection shortcuts">
-          <button id="select-all" class="secondary-button" type="button">Select all</button>
-          <button id="select-none" class="secondary-button" type="button">Clear selection</button>
-        </div>
+        </section>
 
         <form id="benchmark-form" class="benchmark-form">
           <div class="field">
             <label for="runs">Measured runs</label>
-            <input id="runs" type="number" min="1" max="20" value="5" required />
+            <input id="runs" type="number" min="1" max="20" value="10" required />
             <p class="hint">Per model, after one excluded warm-up.</p>
           </div>
           <div class="field">
@@ -122,8 +180,8 @@
             <p class="hint">Longer outputs stabilize throughput.</p>
           </div>
           <div class="field">
-            <label for="concurrency">Parallel models</label>
-            <input id="concurrency" type="number" min="1" max="12" value="1" required />
+            <label for="concurrency">Parallel models to test</label>
+            <input id="concurrency" type="number" min="1" max="12" value="3" required />
             <p class="hint">Runs for the same model stay serial.</p>
           </div>
           <div class="field">
@@ -136,36 +194,39 @@
             <textarea id="benchmark-prompt" rows="3" required>Output lowercase English words separated by single spaces. Do not use punctuation or add any other text. Begin immediately and continue until stopped.</textarea>
             <p class="hint">A short prompt keeps this test focused on output-generation speed. Fixed output length provides a stable measurement window.</p>
           </div>
-          <div class="benchmark-toggle-control">
-            <label for="log-console">
-              <input id="log-console" type="checkbox" />
-              <span>Log requests and responses to the browser console</span>
-            </label>
-            <p class="hint">Logs the HTTP-style request, exact SSE chunks, an assembled response with reasoning and final content separated, summaries, and errors. The API key is always redacted.</p>
-          </div>
-          <div class="benchmark-toggle-control">
-            <label for="disable-thinking">
-              <input id="disable-thinking" type="checkbox" checked />
-              <span>Disable thinking</span>
-            </label>
-            <p class="hint">Adds <code>chat_template_kwargs: { enable_thinking: false }</code> to every benchmark request.</p>
-          </div>
-          <div class="benchmark-toggle-control">
-            <label for="fixed-output">
-              <input id="fixed-output" type="checkbox" checked />
-              <span>Force fixed output length</span>
-            </label>
-            <p class="hint">Sends <code>min_tokens</code> equal to max output tokens and <code>ignore_eos: true</code>. Requires a compatible endpoint.</p>
-          </div>
-          <div class="benchmark-toggle-control">
-            <label for="require-server-tokens">
-              <input id="require-server-tokens" type="checkbox" checked />
-              <span>Require server token counts</span>
-            </label>
-            <p class="hint">Fails a request when streaming usage is missing instead of estimating tokens.</p>
-          </div>
+          <fieldset class="benchmark-options">
+            <legend>Request options</legend>
+            <div class="benchmark-toggle-control">
+              <label for="disable-thinking">
+                <input id="disable-thinking" type="checkbox" checked />
+                <span>Disable thinking</span>
+              </label>
+              <p class="hint">Adds <code>chat_template_kwargs: { enable_thinking: false }</code> to every request.</p>
+            </div>
+            <div class="benchmark-toggle-control">
+              <label for="fixed-output">
+                <input id="fixed-output" type="checkbox" checked />
+                <span>Force fixed output length</span>
+              </label>
+              <p class="hint">Sends <code>min_tokens</code> equal to max output tokens and <code>ignore_eos: true</code>. Requires a compatible endpoint.</p>
+            </div>
+            <div class="benchmark-toggle-control">
+              <label for="require-server-tokens">
+                <input id="require-server-tokens" type="checkbox" checked />
+                <span>Require server token counts</span>
+              </label>
+              <p class="hint">Fails a request when streaming usage is missing instead of estimating tokens.</p>
+            </div>
+            <div class="benchmark-toggle-control">
+              <label for="log-console">
+                <input id="log-console" type="checkbox" />
+                <span>Log requests and responses to the browser console</span>
+              </label>
+              <p class="hint">Logs the HTTP-style request, exact SSE chunks, assembled output, summaries, and errors. The API key is always redacted.</p>
+            </div>
+          </fieldset>
           <div class="run-actions">
-            <button id="run-button" class="primary-button" type="submit">
+            <button id="run-button" class="primary-button" type="submit" disabled>
               <span>Run selected</span><span aria-hidden="true">→</span>
             </button>
             <button id="cancel-button" class="secondary-button" type="button" hidden>Cancel</button>
@@ -219,27 +280,39 @@
             <div><span>Estimated cost</span><strong id="summary-cost">—</strong></div>
           </div>
           <p id="usage-note" class="table-hint"></p>
-          <details class="methodology">
-            <summary>Measurement methodology</summary>
+        </div>
+
+        <details class="methodology-details">
+          <summary>Full testing methodology</summary>
+          <div class="methodology">
             <ul>
               <li><strong>TTFT</strong> runs from request dispatch to the first non-empty content or reasoning delta.</li>
               <li><strong>Tokens/sec</strong> divides completion tokens by elapsed streaming time after that first delta.</li>
               <li><strong>End-to-end latency</strong> runs from request dispatch until the response stream closes.</li>
-              <li>One warm-up runs per model. It is excluded from latency summaries but included in test time, token usage, and cost.</li>
+              <li>One warm-up request runs per model. It is excluded from latency summaries but included in test time, token usage, and cost.</li>
               <li>Total run time is wall-clock time; parallel model times are not summed.</li>
               <li>Cost uses each model's displayed input and output price per million tokens; models without pricing remain unpriced.</li>
               <li>Output health is diagnostic only. Missing final content and unusually short output produce warnings without invalidating runs; reaching the configured token ceiling is expected.</li>
-              <li>The quick preset uses a short, unpadded prompt and targets exactly 1,024 output tokens at concurrency 1. Actual token counts come from server usage.</li>
+              <li>The quick preset uses a short, unpadded prompt and targets exactly 1,024 output tokens at concurrency 3. Actual token counts come from server usage.</li>
               <li>TTFT therefore represents short-prompt latency. Long-context prefill performance should be measured separately with controlled input sizes.</li>
               <li>Models run in parallel; measured runs for a given model remain serial. Use concurrency 1 for an isolated latency baseline.</li>
               <li>Model scheduling order is randomized and recorded in the raw export to reduce time-of-run bias.</li>
+              <li class="methodology-request-item">
+                <details class="methodology-request">
+                  <summary>Benchmark request</summary>
+                  <p class="sample-request-note">Live request template based on the current settings. The selected model is inserted when the test runs, and the API key is always redacted.</p>
+                  <pre class="sample-request"><code id="request-template-code"></code></pre>
+                </details>
+              </li>
+              <li class="methodology-sample-item">
+                <details class="sample-exchange">
+                  <summary>Sample request</summary>
+                  <p id="sample-request-note" class="sample-request-note">Captured from a completed measured run. The API key is redacted.</p>
+                  <pre class="sample-request"><code id="sample-request-code"></code></pre>
+                </details>
+              </li>
             </ul>
             <div class="sample-exchanges">
-              <details class="sample-exchange">
-                <summary>Sample request</summary>
-                <p id="sample-request-note" class="sample-request-note">Captured from a completed measured run. The API key is redacted.</p>
-                <pre class="sample-request"><code id="sample-request-code"></code></pre>
-              </details>
               <details class="sample-exchange">
                 <summary>Sample streaming response</summary>
                 <p id="sample-response-note" class="sample-request-note">Raw response headers and every decoded network chunk from the same measured run. Chunk labels are added by the benchmark.</p>
@@ -251,9 +324,11 @@
                 <pre class="sample-request"><code id="sample-output-code"></code></pre>
               </details>
             </div>
-          </details>
-        </div>
+          </div>
+        </details>
+
       </section>
+      </div>
     </main>
   </body>
 </html>
