@@ -63,12 +63,7 @@
         aria-labelledby="models-tab"
       >
 
-      <section class="connection-card" aria-labelledby="connection-heading">
-        <div class="section-heading">
-          <h2 id="connection-heading">Connection</h2>
-          <span class="privacy-note">Credentials stay in this browser tab</span>
-        </div>
-
+      <section class="connection-card">
         <form id="connection-form">
           <div class="field provider-field">
             <label for="provider">Provider</label>
@@ -135,12 +130,21 @@
 
         <div class="model-selection-actions" aria-label="Model selection shortcuts">
           <span class="selection-label">Quick select</span>
+          <input
+            id="model-search"
+            class="model-search"
+            type="search"
+            placeholder="Search models…"
+            aria-label="Search models"
+          />
           <button id="select-newest-models" class="secondary-button" type="button">Select 5 newest</button>
           <button id="select-intelligent-models" class="secondary-button" type="button">Select top 5 intelligent</button>
           <button id="select-all-models" class="secondary-button" type="button">Select all</button>
           <button id="invert-model-selection" class="secondary-button" type="button">Invert selection</button>
           <button id="select-no-models" class="secondary-button" type="button">Select none</button>
         </div>
+
+        <p class="next-step-hint">Once you select the models → choose a benchmark to run.</p>
 
         <div class="table-frame">
           <table>
@@ -250,7 +254,7 @@
 
         <div id="benchmark-results" class="benchmark-results">
           <div class="result-toolbar">
-            <p class="metric-note">Lower latency is better · Higher tokens/sec is better · Warm-up excluded from performance summaries</p>
+            <p class="metric-note">Lower latency is better · Higher tok/s is better · Warm-up excluded from performance summaries</p>
             <div class="export-actions">
               <details class="column-picker">
                 <summary class="secondary-button">Columns</summary>
@@ -272,11 +276,11 @@
                   <th scope="col" data-benchmark-column="status"><button class="sort-button" type="button"><span>Status</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
                   <th scope="col" data-benchmark-column="ttftMedian"><button class="sort-button" type="button"><span>TTFT median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
                   <th scope="col" data-benchmark-column="ttftP95"><button class="sort-button" type="button"><span>TTFT p95</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
-                  <th scope="col" data-benchmark-column="tpsMedian"><button class="sort-button" type="button"><span>Tok/sec median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
-                  <th scope="col" data-benchmark-column="tpsP95"><button class="sort-button" type="button"><span>Tok/sec p95</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
+                  <th scope="col" data-benchmark-column="tpsMedian"><button class="sort-button" type="button"><span>Tok/s median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
+                  <th scope="col" data-benchmark-column="tpsP95"><button class="sort-button" type="button"><span>Tok/s p95</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
                   <th scope="col" data-benchmark-column="e2eMedian"><button class="sort-button" type="button"><span>E2E median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
                   <th scope="col" data-benchmark-column="e2eP95"><button class="sort-button" type="button"><span>E2E p95</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
-                  <th scope="col" data-benchmark-column="totalTestTimeMs"><button class="sort-button" type="button"><span>Model test time</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
+                  <th scope="col" data-benchmark-column="totalTestTimeMs"><button class="sort-button" type="button"><span>Test time</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
                   <th scope="col" data-benchmark-column="totalTokens"><button class="sort-button" type="button"><span>Benchmark tokens</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
                   <th scope="col" data-benchmark-column="cost"><button class="sort-button" type="button"><span>Cost</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
                 </tr>
@@ -299,7 +303,7 @@
           <div class="methodology">
             <ul>
               <li><strong>TTFT</strong> runs from request dispatch to the first non-empty content or reasoning delta.</li>
-              <li><strong>Tokens/sec</strong> divides completion tokens by elapsed streaming time after that first delta.</li>
+              <li><strong>Tok/s</strong> divides completion tokens by elapsed streaming time after that first delta.</li>
               <li><strong>End-to-end latency</strong> runs from request dispatch until the response stream closes.</li>
               <li>One warm-up request runs per model. It is excluded from latency summaries but included in test time, token usage, and cost.</li>
               <li>Total run time is wall-clock time; parallel model times are not summed.</li>
@@ -470,8 +474,8 @@ The table is regenerated per question from a deterministic seed; the model never
                   <th scope="col" data-thinking-column="formatCompliance"><button class="sort-button" type="button"><span>Format%</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
                   <th scope="col" data-thinking-column="ttftMedian" title="Median (P50)"><button class="sort-button" type="button"><span>TTFT median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
                   <th scope="col" data-thinking-column="ttftP95"><button class="sort-button" type="button"><span>TTFT p95</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
-                  <th scope="col" data-thinking-column="tpsMedian" title="Median (P50)"><button class="sort-button" type="button"><span>Tok/sec median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
-                  <th scope="col" data-thinking-column="tpsP95"><button class="sort-button" type="button"><span>Tok/sec p95</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
+                  <th scope="col" data-thinking-column="tpsMedian" title="Median (P50)"><button class="sort-button" type="button"><span>Tok/s median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
+                  <th scope="col" data-thinking-column="tpsP95"><button class="sort-button" type="button"><span>Tok/s p95</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
                   <th scope="col" data-thinking-column="e2eMedian" title="Median (P50)"><button class="sort-button" type="button"><span>E2E median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
                   <th scope="col" data-thinking-column="e2eP95"><button class="sort-button" type="button"><span>E2E p95</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
                   <th scope="col" data-thinking-column="reasoningTokensMedian"><button class="sort-button" type="button"><span>Reasoning tok median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>

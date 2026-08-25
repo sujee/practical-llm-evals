@@ -68,6 +68,7 @@ const thinkingSampleOutputCode = document.querySelector("#thinking-sample-output
 let thinkingRun = null;
 let thinkingAbortController = null;
 let thinkingStartedAtMs = null;
+let thinkingClockInterval = null;
 let thinkingSortState = { key: "accuracy", direction: "descending" };
 let visibleThinkingColumns = loadVisibleThinkingColumns();
 if (!visibleThinkingColumns.has(thinkingSortState.key)) {
@@ -230,6 +231,7 @@ function setThinkingRunning(isRunning) {
   if (typeof runButton !== "undefined") {
     runButton.disabled = isRunning || !models.some((model) => model.selected) || modelsLoading || benchmarkAbortController != null;
   }
+  if (isRunning) startThinkingClock(); else stopThinkingClock();
 }
 
 function setThinkingStatus(message, isError = false) {
@@ -244,6 +246,7 @@ async function benchmarkThinkingModel(result, config, signal, connection, runSee
     return;
   }
   const modelStartedAt = performance.now();
+  result.startedAtMs = modelStartedAt;
   result.startedAt = new Date().toISOString();
   result.status = "warming";
   renderThinkingResults();
@@ -773,7 +776,7 @@ function renderThinkingResults() {
         ? "—"
         : `${formatInteger(usage.totalTokens)} (${formatInteger(usage.promptTokens)} in / ${formatInteger(usage.completionTokens)} out)${usage.hasEstimated ? " *" : ""}`,
       cost: usage.requestCount === 0 ? "—" : usage.cost === null ? "Unpriced" : formatCost(usage.cost),
-      totalTestTimeMs: formatDuration(result.totalTestTimeMs),
+      totalTestTimeMs: formatDuration(result.totalTestTimeMs ?? getThinkingElapsedMs(result)),
     };
     const statusClass = result.status === "complete"
       ? "complete"
@@ -795,6 +798,8 @@ function renderThinkingResults() {
         cell.append(pill);
       } else if (key === "accuracy") {
         cell.textContent = formatRatioPercent(accuracy.accuracy, 1, accuracy.correct, accuracy.total);
+        const accuracyHighlight = getAccuracyHighlightClass(accuracy.accuracy);
+        if (accuracyHighlight) cell.classList.add(accuracyHighlight);
       } else if (key === "formatCompliance") {
         cell.textContent = formatRatioPercent(accuracy.formatCompliance, 1, accuracy.compliant, accuracy.total);
       } else {
@@ -947,7 +952,7 @@ function getThinkingSortValue(result, key) {
     costPerCorrect,
     totalTokens: usage.requestCount > 0 ? usage.totalTokens : null,
     cost: usage.cost,
-    totalTestTimeMs: result.totalTestTimeMs,
+    totalTestTimeMs: result.totalTestTimeMs ?? getThinkingElapsedMs(result),
   };
   return values[key];
 }
@@ -984,6 +989,35 @@ function formatRatioPercent(ratio, scale = 1, numerator = null, denominator = nu
   if (ratio === null || ratio === undefined) return "—";
   const pct = Math.round(ratio * 100 * scale);
   return `${pct}%`;
+}
+
+function getAccuracyHighlightClass(accuracy) {
+  if (accuracy === null || accuracy === undefined) return null;
+  if (accuracy === 1) return "accuracy-high";
+  if (accuracy < 0.5) return "accuracy-low";
+  return "accuracy-mid";
+}
+
+function getThinkingElapsedMs(result) {
+  if (!result.startedAtMs) return null;
+  if (result.status === "queued" || result.status === "warming" || /^run \d+\/\d+$/i.test(result.status)) {
+    return performance.now() - result.startedAtMs;
+  }
+  return null;
+}
+
+function startThinkingClock() {
+  stopThinkingClock();
+  thinkingClockInterval = setInterval(() => {
+    if (thinkingRun?.status === "running") renderThinkingResults();
+  }, 1000);
+}
+
+function stopThinkingClock() {
+  if (thinkingClockInterval) {
+    clearInterval(thinkingClockInterval);
+    thinkingClockInterval = null;
+  }
 }
 
 function renderThinkingRequestTemplate() {

@@ -20,6 +20,7 @@ const selectIntelligentModelsButton = document.querySelector("#select-intelligen
 const selectAllModelsButton = document.querySelector("#select-all-models");
 const invertModelSelectionButton = document.querySelector("#invert-model-selection");
 const selectNoModelsButton = document.querySelector("#select-no-models");
+const modelSearchInput = document.querySelector("#model-search");
 const modelSelectionButtons = [
   selectNewestModelsButton,
   selectIntelligentModelsButton,
@@ -99,7 +100,9 @@ let sortState = { key: "releaseDate", direction: "descending" };
 let benchmarkRun = null;
 let benchmarkAbortController = null;
 let benchmarkStartedAtMs = null;
+let benchmarkClockInterval = null;
 let modelsLoading = false;
+let modelFilterText = "";
 let benchmarkSortState = { key: "tpsMedian", direction: "descending" };
 let visibleBenchmarkColumns = loadVisibleBenchmarkColumns();
 if (!visibleBenchmarkColumns.has(benchmarkSortState.key)) {
@@ -165,6 +168,10 @@ selectIntelligentModelsButton.addEventListener("click", () => selectTopModels("a
 selectAllModelsButton.addEventListener("click", () => setAllModelsSelected(true));
 invertModelSelectionButton.addEventListener("click", invertModelSelection);
 selectNoModelsButton.addEventListener("click", () => setAllModelsSelected(false));
+modelSearchInput.addEventListener("input", () => {
+  modelFilterText = modelSearchInput.value;
+  renderTable();
+});
 cancelButton.addEventListener("click", () => benchmarkAbortController?.abort());
 exportCsvButton.addEventListener("click", exportBenchmarkCsv);
 exportJsonButton.addEventListener("click", exportBenchmarkJson);
@@ -665,7 +672,7 @@ function renderTable() {
   });
   tableHead.append(headerRow);
 
-  const sortedModels = getSortedModels();
+  const sortedModels = getVisibleSortedModels();
 
   sortedModels.forEach((model) => {
     const row = document.createElement("tr");
@@ -710,8 +717,8 @@ function updateModelResultsState() {
   });
 }
 
-function getSortedModels() {
-  return [...models].sort((left, right) => {
+function getSortedModels(source = models) {
+  return [...source].sort((left, right) => {
     const leftValue = left[sortState.key];
     const rightValue = right[sortState.key];
     if (isMissing(leftValue)) return isMissing(rightValue) ? 0 : 1;
@@ -721,13 +728,36 @@ function getSortedModels() {
   });
 }
 
+function getVisibleSortedModels() {
+  return getSortedModels(getFilteredModels(models));
+}
+
+function getFilteredModels(source) {
+  if (!modelFilterText) return source;
+  const query = modelFilterText.toLowerCase().trim();
+  return source.filter((model) => modelMatchesSearch(model, query));
+}
+
+function modelMatchesSearch(model, query) {
+  if (!query) return true;
+  const searchable = [
+    model.modelId,
+    model.releaseDate,
+    model.aaIndex,
+    model.contextWindow,
+    model.parameterCount,
+  ].map((value) => (value == null ? "" : String(value)).toLowerCase());
+  return searchable.some((part) => part.includes(query));
+}
+
 function setAllModelsSelected(isSelected) {
-  applyModelSelection(() => isSelected);
+  const visibleSet = new Set(getFilteredModels(models));
+  applyModelSelection((model) => (visibleSet.has(model) ? isSelected : model.selected));
 }
 
 function selectTopModels(key, limit) {
   const selectedModels = new Set(
-    models
+    getFilteredModels(models)
       .filter((model) => !isMissing(model[key]))
       .sort((left, right) => (
         compareValues(right[key], left[key])
@@ -739,7 +769,8 @@ function selectTopModels(key, limit) {
 }
 
 function invertModelSelection() {
-  applyModelSelection((model) => !model.selected);
+  const visibleSet = new Set(getFilteredModels(models));
+  applyModelSelection((model) => (visibleSet.has(model) ? !model.selected : model.selected));
 }
 
 function applyModelSelection(shouldSelect) {
@@ -775,6 +806,7 @@ async function benchmarkModel(result, config, signal, connection) {
     return;
   }
   const modelStartedAt = performance.now();
+  result.startedAtMs = modelStartedAt;
   result.startedAt = new Date().toISOString();
   result.status = "warming";
   renderBenchmarkResults();
@@ -1153,6 +1185,7 @@ function renderBenchmarkResults() {
       : result.status === "partial" ? "partial"
       : result.status === "error" ? "error" : result.status === "queued" ? "" : "running";
     const statusTitle = result.errors.map((error) => `${error.run}: ${error.message}`).join("\n");
+    const liveTestTimeMs = result.totalTestTimeMs ?? getBenchmarkElapsedMs(result);
     const values = [
       result.modelId,
       formatBenchmarkResultStatus(result, benchmarkRun.config.runs),
@@ -1162,7 +1195,7 @@ function renderBenchmarkResults() {
       formatRate(summary.tpsP95),
       formatMilliseconds(summary.e2eMedian),
       formatMilliseconds(summary.e2eP95),
-      formatDuration(result.totalTestTimeMs),
+      formatDuration(liveTestTimeMs),
       usage.requestCount === 0
         ? "—"
         : `${formatInteger(usage.totalTokens)} (${formatInteger(usage.promptTokens)} in / ${formatInteger(usage.completionTokens)} out)${usage.hasEstimated ? " *" : ""}`,
@@ -1305,7 +1338,7 @@ function getBenchmarkSortValue(result, key) {
     tpsP95: summary.tpsP95,
     e2eMedian: summary.e2eMedian,
     e2eP95: summary.e2eP95,
-    totalTestTimeMs: result.totalTestTimeMs,
+    totalTestTimeMs: result.totalTestTimeMs ?? getBenchmarkElapsedMs(result),
     totalTokens: usage.requestCount > 0 ? usage.totalTokens : null,
     cost: usage.cost,
   };
@@ -1502,6 +1535,28 @@ function formatDuration(value) {
   return `${minutes}m ${(seconds % 60).toFixed(1)}s`;
 }
 
+function getBenchmarkElapsedMs(result) {
+  if (!result.startedAtMs) return null;
+  if (result.status === "queued" || result.status === "warming" || /^run \d+\/\d+$/i.test(result.status)) {
+    return performance.now() - result.startedAtMs;
+  }
+  return null;
+}
+
+function startBenchmarkClock() {
+  stopBenchmarkClock();
+  benchmarkClockInterval = setInterval(() => {
+    if (benchmarkRun?.status === "running") renderBenchmarkResults();
+  }, 1000);
+}
+
+function stopBenchmarkClock() {
+  if (benchmarkClockInterval) {
+    clearInterval(benchmarkClockInterval);
+    benchmarkClockInterval = null;
+  }
+}
+
 function formatInteger(value) {
   return Math.round(value).toLocaleString();
 }
@@ -1533,6 +1588,7 @@ function setBenchmarkRunning(isRunning) {
       || !models.some((model) => model.selected)
       || modelsLoading;
   }
+  if (isRunning) startBenchmarkClock(); else stopBenchmarkClock();
 }
 
 function setBenchmarkStatus(message, isError = false) {
