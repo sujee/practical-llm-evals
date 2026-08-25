@@ -62,7 +62,7 @@ const benchmarkSortHeaders = [...document.querySelectorAll("[data-benchmark-colu
 const benchmarkColumnOptions = document.querySelector("#benchmark-column-options");
 const showAllColumnsButton = document.querySelector("#show-all-columns");
 const benchmarkColumnKeys = benchmarkSortHeaders.map((header) => header.dataset.benchmarkColumn);
-const benchmarkColumnPreferenceKey = "quick-llm-bench:benchmark-columns:v7";
+const benchmarkColumnPreferenceKey = "quick-llm-bench:benchmark-columns:v8";
 
 const endpointPresets = {
   nebius: {
@@ -176,6 +176,9 @@ benchmarkSortHeaders.forEach((header) => {
   });
 });
 initializeBenchmarkColumnPicker();
+resetBenchmarkResults();
+renderTable();
+updateModelResultsState();
 showAllColumnsButton.addEventListener("click", () => {
   visibleBenchmarkColumns = new Set(benchmarkColumnKeys);
   saveVisibleBenchmarkColumns();
@@ -221,11 +224,11 @@ form.addEventListener("submit", async (event) => {
     sortState = { key: "releaseDate", direction: "descending" };
     renderTable();
     results.hidden = false;
-    benchmarkResults.hidden = true;
-    benchmarkRun = null;
+    resetBenchmarkResults();
+    if (typeof resetThinkingResults === "function") resetThinkingResults();
     setBenchmarkStatus("");
     updateSelectionCount();
-    modelCount.textContent = `${models.length} model${models.length === 1 ? "" : "s"}`;
+    updateModelResultsState();
     const referenceMatches = models.filter((model) => model.referenceMatched).length;
     const skippedMessage = skippedEmbeddings === 0
       ? ""
@@ -236,11 +239,12 @@ form.addEventListener("submit", async (event) => {
     results.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     models = [];
-    benchmarkRun = null;
+    resetBenchmarkResults();
+    if (typeof resetThinkingResults === "function") resetThinkingResults();
     renderTable();
     updateSelectionCount();
-    results.hidden = true;
-    benchmarkResults.hidden = true;
+    results.hidden = false;
+    updateModelResultsState();
     setBenchmarkStatus("");
     const corsHint = error instanceof TypeError ? " The endpoint may not allow browser requests (CORS)." : "";
     setStatus(`${error.message || "Unable to load models."}${corsHint}`, true);
@@ -251,6 +255,10 @@ form.addEventListener("submit", async (event) => {
 
 benchmarkForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (typeof thinkingAbortController !== "undefined" && thinkingAbortController != null) {
+    setBenchmarkStatus("Thinking Test 1 is already running.", true);
+    return;
+  }
   const selectedModels = models.filter((model) => model.selected);
   if (selectedModels.length === 0) {
     setBenchmarkStatus("Select at least one model to run.", true);
@@ -314,6 +322,8 @@ benchmarkForm.addEventListener("submit", async (event) => {
       totalTestTimeMs: null,
     })),
   };
+  exportCsvButton.disabled = false;
+  exportJsonButton.disabled = false;
   const scheduledResults = shuffleWithSeed([...benchmarkRun.results], runSeed);
   benchmarkRun.executionOrder = scheduledResults.map((result) => result.modelId);
   renderMethodologySample();
@@ -690,6 +700,16 @@ function renderTable() {
   });
 }
 
+function updateModelResultsState() {
+  const hasModels = models.length > 0;
+  modelCount.textContent = `${models.length} model${models.length === 1 ? "" : "s"}`;
+  exportModelsCsvButton.disabled = !hasModels;
+  exportModelsJsonButton.disabled = !hasModels;
+  modelSelectionButtons.forEach((button) => {
+    button.disabled = !hasModels || modelsLoading || benchmarkAbortController != null;
+  });
+}
+
 function getSortedModels() {
   return [...models].sort((left, right) => {
     const leftValue = left[sortState.key];
@@ -735,6 +755,17 @@ function updateSelectionCount() {
     setStatus(`Selected ${count} model${count === 1 ? "" : "s"}`);
   }
   runButton.disabled = count === 0 || modelsLoading || benchmarkAbortController != null;
+  notifySelectionChanged();
+}
+
+function notifySelectionChanged() {
+  document.dispatchEvent(new CustomEvent("models:selection-changed", {
+    detail: {
+      count: models.filter((model) => model.selected).length,
+      hasModels: models.length > 0,
+      modelsLoading,
+    },
+  }));
 }
 
 async function benchmarkModel(result, config, signal, connection) {
@@ -1124,8 +1155,7 @@ function renderBenchmarkResults() {
     const statusTitle = result.errors.map((error) => `${error.run}: ${error.message}`).join("\n");
     const values = [
       result.modelId,
-      result.status,
-      `${result.runs.length}/${benchmarkRun.config.runs}`,
+      formatBenchmarkResultStatus(result, benchmarkRun.config.runs),
       formatMilliseconds(summary.ttftMedian),
       formatMilliseconds(summary.ttftP95),
       formatRate(summary.tpsMedian),
@@ -1165,6 +1195,22 @@ function renderBenchmarkResults() {
   if (hasUnpricedUsage) notes.push("Some models lack pricing metadata and are excluded from the total cost.");
   if (hasOutputWarnings) notes.push("Output health warnings are diagnostic; their runs remain included in latency and throughput summaries.");
   usageNote.textContent = notes.join(" ");
+}
+
+function resetBenchmarkResults() {
+  benchmarkRun = null;
+  benchmarkBody.replaceChildren();
+  summaryTime.textContent = "—";
+  summaryInputTokens.textContent = "—";
+  summaryOutputTokens.textContent = "—";
+  summaryTotalTokens.textContent = "—";
+  summaryCost.textContent = "—";
+  summaryCost.removeAttribute("title");
+  usageNote.textContent = "Results will appear here after a raw speed benchmark run.";
+  exportCsvButton.disabled = true;
+  exportJsonButton.disabled = true;
+  benchmarkResults.hidden = false;
+  updateBenchmarkSortHeaders();
 }
 
 function sortBenchmarkBy(key) {
@@ -1253,7 +1299,6 @@ function getBenchmarkSortValue(result, key) {
   const values = {
     modelId: result.modelId,
     status: result.status,
-    runs: result.runs.length,
     ttftMedian: summary.ttftMedian,
     ttftP95: summary.ttftP95,
     tpsMedian: summary.tpsMedian,
@@ -1265,6 +1310,21 @@ function getBenchmarkSortValue(result, key) {
     cost: usage.cost,
   };
   return values[key];
+}
+
+function formatBenchmarkResultStatus(result, totalRuns) {
+  const progress = `${result.runs.length}/${totalRuns}`;
+  const activeRun = /^run (\d+\/\d+)$/i.exec(result.status);
+  if (activeRun) return `Running ${activeRun[1]}`;
+  switch (result.status) {
+    case "queued": return "Queued";
+    case "warming": return "Warming up";
+    case "complete": return "Completed";
+    case "partial": return `Partial ${progress}`;
+    case "cancelled": return `Cancelled ${progress}`;
+    case "error": return "Error";
+    default: return result.status;
+  }
 }
 
 function summarizeRuns(runs) {
@@ -1467,6 +1527,12 @@ function setBenchmarkRunning(isRunning) {
   connectionControls.forEach((control) => { control.disabled = isRunning; });
   benchmarkConfigInputs.forEach((control) => { control.disabled = isRunning; });
   tableBody.querySelectorAll(".model-select").forEach((checkbox) => { checkbox.disabled = isRunning; });
+  if (typeof thinkingRunButton !== "undefined") {
+    thinkingRunButton.disabled = isRunning
+      || thinkingAbortController != null
+      || !models.some((model) => model.selected)
+      || modelsLoading;
+  }
 }
 
 function setBenchmarkStatus(message, isError = false) {
@@ -1559,7 +1625,6 @@ function getBenchmarkTotalValue(key) {
   const values = {
     modelId: "TOTAL RUN",
     status: benchmarkRun.status,
-    runs: benchmarkRun.results.reduce((sum, result) => sum + result.runs.length, 0),
     ttftMedian: null,
     ttftP95: null,
     tpsMedian: null,
@@ -1660,11 +1725,12 @@ function setLoading(isLoading) {
   loadButton.firstElementChild.textContent = isLoading ? "Loading…" : "Load models";
   loadButton.setAttribute("aria-busy", String(isLoading));
   connectionControls.forEach((control) => { control.disabled = isLoading; });
-  modelSelectionButtons.forEach((button) => { button.disabled = isLoading; });
+  modelSelectionButtons.forEach((button) => { button.disabled = isLoading || models.length === 0; });
   tableBody.querySelectorAll(".model-select").forEach((checkbox) => { checkbox.disabled = isLoading; });
   runButton.disabled = isLoading
     || benchmarkAbortController != null
     || !models.some((model) => model.selected);
+  notifySelectionChanged();
 }
 
 function setStatus(message, isError = false) {

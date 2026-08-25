@@ -10,6 +10,7 @@
     <title>LLM Quick Bench — Streaming Performance</title>
     <link rel="stylesheet" href="styles.css" />
     <script src="raw-speed-test1.js" defer></script>
+    <script src="thinking-test1.js" defer></script>
   </head>
   <body>
     <main class="shell">
@@ -39,6 +40,17 @@
           tabindex="-1"
         >
           Raw Speed Test 1
+        </button>
+        <button
+          id="thinking-test1-tab"
+          class="tab-button"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="thinking-test1-panel"
+          tabindex="-1"
+        >
+          Thinking Test 1
         </button>
       </nav>
 
@@ -111,7 +123,7 @@
 
       </section>
 
-      <section id="results" class="results" aria-labelledby="results-heading" hidden>
+      <section id="results" class="results" aria-labelledby="results-heading">
         <div class="section-heading results-heading">
           <h2 id="results-heading">Available models</h2>
           <div class="results-actions">
@@ -137,7 +149,7 @@
           </table>
         </div>
         <p class="table-hint">
-          Choose models to benchmark. Select any header to sort; blended pricing weights three input tokens for every output token.
+          Load models to populate this table, then choose which ones to benchmark. Select any header to sort; blended pricing weights three input tokens for every output token.
         </p>
       </section>
       </div>
@@ -152,6 +164,7 @@
       <section id="benchmark" class="benchmark" aria-label="Raw Speed Test 1 benchmark">
         <section class="methodology-overview" aria-labelledby="methodology-heading">
           <h3 id="methodology-heading">What Raw Speed Test 1 measures</h3>
+          <p>How fast the endpoint can produce output tokens. Think of it as the "max ceiling" for output production.</p>
           <div class="methodology-metrics">
             <div>
               <strong>Time to first token</strong>
@@ -235,7 +248,7 @@
 
         <div id="benchmark-status" class="status" role="status" aria-live="polite"></div>
 
-        <div id="benchmark-results" class="benchmark-results" hidden>
+        <div id="benchmark-results" class="benchmark-results">
           <div class="result-toolbar">
             <p class="metric-note">Lower latency is better · Higher tokens/sec is better · Warm-up excluded from performance summaries</p>
             <div class="export-actions">
@@ -257,7 +270,6 @@
                 <tr>
                   <th scope="col" data-benchmark-column="modelId"><button class="sort-button" type="button"><span>Model</span><span class="sort-icon" aria-hidden="true">↑</span></button></th>
                   <th scope="col" data-benchmark-column="status"><button class="sort-button" type="button"><span>Status</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
-                  <th scope="col" data-benchmark-column="runs"><button class="sort-button" type="button"><span>Runs</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
                   <th scope="col" data-benchmark-column="ttftMedian"><button class="sort-button" type="button"><span>TTFT median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
                   <th scope="col" data-benchmark-column="ttftP95"><button class="sort-button" type="button"><span>TTFT p95</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
                   <th scope="col" data-benchmark-column="tpsMedian"><button class="sort-button" type="button"><span>Tok/sec median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
@@ -279,11 +291,11 @@
             <div><span>Total tokens</span><strong id="summary-total-tokens">—</strong></div>
             <div><span>Estimated cost</span><strong id="summary-cost">—</strong></div>
           </div>
-          <p id="usage-note" class="table-hint"></p>
+          <p id="usage-note" class="table-hint">Results will appear here after a raw speed benchmark run.</p>
         </div>
 
-        <details class="methodology-details">
-          <summary>Full testing methodology</summary>
+        <details class="methodology-details" open>
+          <summary>Testing methodology</summary>
           <div class="methodology">
             <ul>
               <li><strong>TTFT</strong> runs from request dispatch to the first non-empty content or reasoning delta.</li>
@@ -322,6 +334,207 @@
                 <summary>Consolidated output</summary>
                 <p id="sample-output-note" class="sample-request-note">All generated deltas from the same measured run, assembled in arrival order.</p>
                 <pre class="sample-request"><code id="sample-output-code"></code></pre>
+              </details>
+            </div>
+          </div>
+        </details>
+
+      </section>
+      </div>
+
+      <div
+        id="thinking-test1-panel"
+        class="tab-panel"
+        role="tabpanel"
+        aria-labelledby="thinking-test1-tab"
+        hidden
+      >
+      <section id="thinking-benchmark" class="benchmark" aria-label="Thinking Test 1 benchmark">
+        <section class="methodology-overview" aria-labelledby="thinking-methodology-heading">
+          <h3 id="thinking-methodology-heading">What Thinking Test 1 measures</h3>
+          <p>Performance on a medium thinking task: given a bunch of records, pick the one with the highest score.</p>
+          <div class="methodology-metrics">
+            <div>
+              <strong>Accuracy</strong>
+              <span>Share of runs that correctly identify the row with the highest score.</span>
+            </div>
+            <div>
+              <strong>Format compliance</strong>
+              <span>Share of runs ending in a parseable <code>Final answer: &lt;id&gt;|&lt;name&gt;</code> line.</span>
+            </div>
+            <div>
+              <strong>Cost per correct answer</strong>
+              <span>Total cost divided by the number of correct runs — the headline ranking for thinking models.</span>
+            </div>
+          </div>
+        </section>
+
+        <form id="thinking-form" class="benchmark-form">
+          <div class="field">
+            <label for="thinking-runs">Questions per model</label>
+            <input id="thinking-runs" type="number" min="1" max="50" value="10" required />
+            <p class="hint">Fresh randomized table per question.</p>
+          </div>
+          <div class="field">
+            <label for="thinking-rows">Rows per question</label>
+            <input id="thinking-rows" type="number" min="5" max="200" value="20" required />
+            <p class="hint">More rows = harder to scan.</p>
+          </div>
+          <div class="field">
+            <label for="thinking-format">Data format</label>
+            <select id="thinking-format">
+              <option value="markdown">Markdown table</option>
+              <option value="json">JSON</option>
+              <option value="csv">CSV</option>
+              <option value="pipe" selected>Pipe delimited</option>
+            </select>
+            <p class="hint">Markdown is the friendliest default.</p>
+          </div>
+          <div class="field">
+            <label for="thinking-concurrency">Parallel models to test</label>
+            <input id="thinking-concurrency" type="number" min="1" max="12" value="3" required />
+            <p class="hint">Questions for one model stay serial.</p>
+          </div>
+          <div class="field">
+            <label for="thinking-timeout">Timeout / request (sec)</label>
+            <input id="thinking-timeout" type="number" min="10" max="600" value="120" required />
+            <p class="hint">Stops stalled streams cleanly.</p>
+          </div>
+          <div class="field prompt-field">
+            <label for="thinking-prompt-preview">Prompt template</label>
+            <textarea id="thinking-prompt-preview" rows="6" readonly>Each question builds a fresh table of {rows} rows, each with an id (integer), a unique name label such as user-1, and a numeric score. The model must find the row with the highest score and end with one line in the exact form:
+
+Final answer: &lt;id&gt;|&lt;name&gt;
+
+The table is regenerated per question from a deterministic seed; the model never sees the same table twice within a run.</textarea>
+            <p class="hint">Preview only — the prompt itself is generated per question. A live sample appears under Testing methodology.</p>
+          </div>
+          <fieldset class="benchmark-options">
+            <legend>Request options</legend>
+            <div class="benchmark-toggle-control">
+              <label for="thinking-disable-thinking">
+                <input id="thinking-disable-thinking" type="checkbox" />
+                <span>Disable thinking</span>
+              </label>
+              <p class="hint">Adds <code>chat_template_kwargs: { enable_thinking: false }</code>. Defaults off — this is a thinking test, so leave thinking on for the A/B compare.</p>
+            </div>
+            <div class="benchmark-toggle-control">
+              <label for="thinking-require-server-tokens">
+                <input id="thinking-require-server-tokens" type="checkbox" checked />
+                <span>Require server token counts</span>
+              </label>
+              <p class="hint">Fails a request when streaming usage is missing instead of estimating tokens.</p>
+            </div>
+            <div class="benchmark-toggle-control">
+              <label for="thinking-log-console">
+                <input id="thinking-log-console" type="checkbox" />
+                <span>Log requests and responses to the browser console</span>
+              </label>
+              <p class="hint">Logs the HTTP-style request, exact SSE chunks, assembled output, and grading. The API key is always redacted.</p>
+            </div>
+          </fieldset>
+          <div class="run-actions">
+            <button id="thinking-run-button" class="primary-button" type="submit" disabled>
+              <span>Run selected</span><span aria-hidden="true">→</span>
+            </button>
+            <button id="thinking-cancel-button" class="secondary-button" type="button" hidden>Cancel</button>
+          </div>
+        </form>
+
+        <div id="thinking-status" class="status" role="status" aria-live="polite"></div>
+
+        <div id="thinking-results" class="benchmark-results">
+          <div class="result-toolbar">
+            <p class="metric-note">Higher accuracy is better · Lower cost / correct is better · Warm-up excluded from accuracy summaries</p>
+            <div class="export-actions">
+              <span class="column-picker-cue">Select columns <span aria-hidden="true">→</span></span>
+              <details class="column-picker">
+                <summary class="secondary-button" aria-label="Select visible columns">Columns</summary>
+                <div class="column-menu">
+                  <p>Thinking test results</p>
+                  <div id="thinking-column-options" class="column-options"></div>
+                  <button id="show-all-thinking-columns" class="column-reset" type="button">Show all</button>
+                </div>
+              </details>
+              <button id="export-thinking-csv" class="secondary-button" type="button">Export CSV</button>
+              <button id="export-thinking-json" class="secondary-button" type="button">Export JSON</button>
+            </div>
+          </div>
+          <div class="table-frame">
+            <table class="thinking-table">
+              <thead>
+                <tr>
+                  <th scope="col" data-thinking-column="modelId"><button class="sort-button" type="button"><span>Model</span><span class="sort-icon" aria-hidden="true">↑</span></button></th>
+                  <th scope="col" data-thinking-column="status"><button class="sort-button" type="button"><span>Status</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
+                  <th scope="col" data-thinking-column="accuracy"><button class="sort-button" type="button"><span>Accuracy</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
+                  <th scope="col" data-thinking-column="formatCompliance"><button class="sort-button" type="button"><span>Format%</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
+                  <th scope="col" data-thinking-column="ttftMedian" title="Median (P50)"><button class="sort-button" type="button"><span>TTFT median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
+                  <th scope="col" data-thinking-column="ttftP95"><button class="sort-button" type="button"><span>TTFT p95</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
+                  <th scope="col" data-thinking-column="tpsMedian" title="Median (P50)"><button class="sort-button" type="button"><span>Tok/sec median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
+                  <th scope="col" data-thinking-column="tpsP95"><button class="sort-button" type="button"><span>Tok/sec p95</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
+                  <th scope="col" data-thinking-column="e2eMedian" title="Median (P50)"><button class="sort-button" type="button"><span>E2E median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
+                  <th scope="col" data-thinking-column="e2eP95"><button class="sort-button" type="button"><span>E2E p95</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
+                  <th scope="col" data-thinking-column="reasoningTokensMedian"><button class="sort-button" type="button"><span>Reasoning tok median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
+                  <th scope="col" data-thinking-column="answerTokensMedian"><button class="sort-button" type="button"><span>Answer tok median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
+                  <th scope="col" data-thinking-column="costPerCorrect"><button class="sort-button" type="button"><span>Cost / correct</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
+                  <th scope="col" data-thinking-column="totalTokens"><button class="sort-button" type="button"><span>Benchmark tokens</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
+                  <th scope="col" data-thinking-column="totalTestTimeMs"><button class="sort-button" type="button"><span>Test time</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
+                  <th scope="col" data-thinking-column="cost"><button class="sort-button" type="button"><span>Cost</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
+                </tr>
+              </thead>
+              <tbody id="thinking-body"></tbody>
+            </table>
+          </div>
+          <div class="run-summary" aria-label="Total thinking test usage and accuracy">
+            <div><span>Run time</span><strong id="summary-thinking-time">—</strong></div>
+            <div><span>Accuracy</span><strong id="summary-thinking-accuracy">—</strong></div>
+            <div><span>Total tokens</span><strong id="summary-thinking-total-tokens">—</strong></div>
+            <div><span>Estimated cost</span><strong id="summary-thinking-cost">—</strong></div>
+            <div><span>Cost / correct</span><strong id="summary-thinking-cost-per-correct">—</strong></div>
+          </div>
+          <p id="thinking-usage-note" class="table-hint">Results will appear here after a thinking benchmark run.</p>
+        </div>
+
+        <details class="methodology-details" open>
+          <summary>Testing methodology</summary>
+          <div class="methodology">
+            <ul>
+              <li><strong>Prompt</strong> is generated per question from a deterministic seed. Each question presents a fresh randomized table of <code>{rows}</code> rows with id, name, and score, then asks the model to return the id and name of the row with the highest score.</li>
+              <li><strong>Scores are unique integers</strong> in a range larger than the row count, so there is always exactly one highest-scoring row with no ties to break.</li>
+              <li><strong>Names are deterministic</strong> labels in the form <code>user-1</code>, <code>user-2</code>, and so on, so every row's name is unique within a question.</li>
+              <li><strong>Row order is shuffled</strong> with a per-question seed, so the highest-scoring row is uniformly distributed across positions — the model cannot shortcut by reading the first or last row.</li>
+              <li><strong>Grading</strong> requires the final non-empty line of the model's final content to exactly match <code>Final answer: &lt;id&gt;|&lt;name&gt;</code> (reasoning deltas are ignored). The id must use canonical positive-integer syntax and the name must match case-insensitively. Accuracy is correct runs / total measured runs.</li>
+              <li><strong>Format compliance</strong> is tracked separately — a run can be format-compliant (a parseable Final answer line) but incorrect, which separates "couldn't find the max" from "couldn't follow the format".</li>
+              <li><strong>Reasoning tokens</strong> are estimated from the <code>reasoning_content</code> / <code>reasoning</code> SSE deltas and shown alongside answer tokens (final content). The split is estimated — the server only provides the total.</li>
+              <li><strong>TTFT</strong>, <strong>Tokens/sec</strong>, and <strong>End-to-end latency</strong> are measured the same way as Raw Speed Test 1 but on a per-question basis, so values reflect varying prompt sizes.</li>
+              <li><strong>Cost per correct answer</strong> = total cost ÷ correct runs. A model with high accuracy and low cost ranks first. Models with zero correct runs show "—".</li>
+              <li>One warm-up question runs per model. It is excluded from accuracy, latency, and token summaries but included in test time, token usage, and cost.</li>
+              <li>Total run time is wall-clock time; parallel model times are not summed.</li>
+              <li class="methodology-request-item">
+                <details class="methodology-request">
+                  <summary>Benchmark request</summary>
+                  <p class="sample-request-note">Live request template based on the current settings. A sample prompt with a real generated table is shown; the selected model is inserted when the test runs, and the API key is always redacted.</p>
+                  <pre class="sample-request"><code id="thinking-request-template-code"></code></pre>
+                </details>
+              </li>
+              <li class="methodology-sample-item">
+                <details class="sample-exchange">
+                  <summary>Sample request</summary>
+                  <p id="thinking-sample-request-note" class="sample-request-note">Captured from a completed measured run. The API key is redacted.</p>
+                  <pre class="sample-request"><code id="thinking-sample-request-code"></code></pre>
+                </details>
+              </li>
+            </ul>
+            <div class="sample-exchanges">
+              <details class="sample-exchange">
+                <summary>Sample streaming response</summary>
+                <p id="thinking-sample-response-note" class="sample-request-note">Raw response headers and every decoded network chunk from the same measured run. Chunk labels are added by the benchmark.</p>
+                <pre class="sample-request"><code id="thinking-sample-response-code"></code></pre>
+              </details>
+              <details class="sample-exchange">
+                <summary>Sample consolidated response</summary>
+                <p id="thinking-sample-output-note" class="sample-request-note">All generated deltas from the same measured run, split into reasoning and final content, plus the grading verdict.</p>
+                <pre class="sample-request"><code id="thinking-sample-output-code"></code></pre>
               </details>
             </div>
           </div>
