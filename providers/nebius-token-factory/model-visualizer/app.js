@@ -39,6 +39,13 @@
     price_output_1m: 'Pricing output (1M)'
   };
 
+  const DARK_PALETTE = [
+    '#4992ff', '#7cffb2', '#fddd60', '#ff6e76', '#58d9f9',
+    '#05c091', '#ff8a45', '#8d48e3', '#dd79ff', '#fb7185',
+    '#fbbf24', '#4ade80', '#c084fc', '#38bdf8', '#f472b6',
+    '#34d399', '#fb923c', '#818cf8', '#a3e635', '#fcd34d'
+  ];
+
   // Theme comes from the inline head script (localStorage or prefers-color-scheme)
   let theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
   let chart, chart2, chart3;
@@ -162,7 +169,8 @@
         nameGap: 44,
         splitLine: { lineStyle: { type: 'dashed' } }
       },
-      series: buildSeries()
+      series: buildSeries(),
+      ...(theme === 'dark' ? { color: DARK_PALETTE } : {})
     };
   }
 
@@ -220,7 +228,8 @@
         nameGap: 44,
         splitLine: { lineStyle: { type: 'dashed' } }
       },
-      series: buildSeriesRelease()
+      series: buildSeriesRelease(),
+      ...(theme === 'dark' ? { color: DARK_PALETTE } : {})
     };
   }
 
@@ -301,7 +310,8 @@
         axisLabel: { formatter: v => fmtCtx(v) },
         splitLine: { lineStyle: { type: 'dashed' } }
       },
-      series: buildSeriesContext()
+      series: buildSeriesContext(),
+      ...(theme === 'dark' ? { color: DARK_PALETTE } : {})
     };
   }
 

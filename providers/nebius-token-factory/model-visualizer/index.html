@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nebius Token Factory Models</title>
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script src="vendor/echarts-6.1.0.min.js"></script>
 <script>
   // Apply saved/preferred theme before first paint to avoid a light-flash in dark mode
   document.documentElement.dataset.theme =
@@ -186,8 +186,8 @@
   </div>
   <div id="error">
     Could not load <code>model-info.json</code>. If you opened this file directly,
-    serve the folder over HTTP instead, e.g. <code>python3 -m http.server</code>,
-    then visit <code>http://localhost:8000/providers/nebius-token-factory/model-visualizer/</code>.
+    serve the folder over HTTP instead (from this directory), e.g. <code>python -m http.server 8000</code>,
+    then visit <code>http://localhost:8000</code>.
   </div>
   <div id="chart"></div>
 

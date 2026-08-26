@@ -42,9 +42,10 @@ curl --request GET \
 To test locally:
 
 ```bash
-python -m http.server
+# from this dir
+python -m http.server 8000
 ```
 
-And go to url : http://localhost:8000/providers/nebius-token-factory/model-visualizer/
+And go to url : http://localhost:8000
 
 (if you just open the index.html in the browser, it may not work well!)
