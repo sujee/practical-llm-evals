@@ -32,6 +32,8 @@
   // e.g. 30B -> ~14px, 1000B -> ~66px, 2800B (Kimi-K3) -> ~109px
   const bubbleSize = params => Math.min(3 + Math.sqrt(params) * 2, 120);
 
+  const escapeHtml = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
   // X-axis price metrics selectable via dropdown
   const METRICS = {
     pricing_blended_1m: 'Pricing blended (1M)',
@@ -107,20 +109,20 @@
     if (p.data && p.data.frontier) {
       if (!p.data.date) return '';
       return [
-        `Largest context available: <b>${fmtCtx(p.value[1])}</b> tokens`,
-        `Since <b>${p.data.date}</b> (${p.data.modelId})`
+        `Largest context available: <b>${escapeHtml(fmtCtx(p.value[1]))}</b> tokens`,
+        `Since <b>${escapeHtml(p.data.date)}</b> (${escapeHtml(p.data.modelId)})`
       ].join('<br>');
     }
     const m = p.data.model;
     return [
-      `<b>${m.model_id}</b>`,
-      `AA intelligence index: <b>${m.aa_intelligence_index}</b>`,
-      `Pricing (1M blended): <b>${fmtPrice(m.pricing_blended_1m)}</b>`,
-      `Pricing (1M input): <b>${fmtPrice(m.price_input_1m)}</b>`,
-      `Pricing (1M output): <b>${fmtPrice(m.price_output_1m)}</b>`,
-      `Parameters: <b>${m.param_count} B</b>`,
-      `Context: <b>${fmtCtx(m.context_window_K)} tokens</b>`,
-      `Released: <b>${m.model_release_date}</b>`
+      `<b>${escapeHtml(m.model_id)}</b>`,
+      `AA intelligence index: <b>${escapeHtml(m.aa_intelligence_index)}</b>`,
+      `Pricing (1M blended): <b>${escapeHtml(fmtPrice(m.pricing_blended_1m))}</b>`,
+      `Pricing (1M input): <b>${escapeHtml(fmtPrice(m.price_input_1m))}</b>`,
+      `Pricing (1M output): <b>${escapeHtml(fmtPrice(m.price_output_1m))}</b>`,
+      `Parameters: <b>${escapeHtml(m.param_count)} B</b>`,
+      `Context: <b>${escapeHtml(fmtCtx(m.context_window_K))} tokens</b>`,
+      `Released: <b>${escapeHtml(m.model_release_date)}</b>`
     ].join('<br>');
   }
 
@@ -351,14 +353,14 @@
 
   btnBubbles2.addEventListener('click', () => {
     sizeByParams2 = !sizeByParams2;
-    btnBubbles2.innerHTML = 'Size &prop; params: ' + (sizeByParams2 ? 'ON' : 'OFF');
+    btnBubbles2.textContent = 'Size ∝ params: ' + (sizeByParams2 ? 'ON' : 'OFF');
     btnBubbles2.classList.toggle('active', sizeByParams2);
     chart2.setOption(buildOptionRelease());
   });
 
   btnBubbles.addEventListener('click', () => {
     sizeByParams = !sizeByParams;
-    btnBubbles.innerHTML = 'Size &prop; params: ' + (sizeByParams ? 'ON' : 'OFF');
+    btnBubbles.textContent = 'Size ∝ params: ' + (sizeByParams ? 'ON' : 'OFF');
     btnBubbles.classList.toggle('active', sizeByParams);
     chart.setOption(buildOption());
   });
@@ -372,7 +374,7 @@
 
   btnBubbles3.addEventListener('click', () => {
     sizeByParams3 = !sizeByParams3;
-    btnBubbles3.innerHTML = 'Size &prop; params: ' + (sizeByParams3 ? 'ON' : 'OFF');
+    btnBubbles3.textContent = 'Size ∝ params: ' + (sizeByParams3 ? 'ON' : 'OFF');
     btnBubbles3.classList.toggle('active', sizeByParams3);
     chart3.setOption(buildOptionContext());
   });
