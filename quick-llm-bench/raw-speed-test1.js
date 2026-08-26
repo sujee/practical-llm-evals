@@ -908,7 +908,7 @@ function renderBenchmarkResults() {
       ? "complete"
       : result.status === "partial" ? "partial"
       : result.status === "error" ? "error" : result.status === "queued" ? "" : "running";
-    const statusTitle = result.errors.map((error) => `${error.run}: ${error.message}`).join("\n");
+    const statusTitle = result.errors.length > 0 ? "Check console for errors." : "";
     const liveTestTimeMs = result.totalTestTimeMs ?? getBenchmarkElapsedMs(result);
     const values = [
       result.modelId,
@@ -931,10 +931,10 @@ function renderBenchmarkResults() {
       cell.hidden = !visibleBenchmarkColumns.has(columnKey);
       cell.classList.toggle("sorted-column", benchmarkSortState.key === columnKey);
       if (index === 1) {
+        if (statusTitle) cell.title = statusTitle;
         const pill = document.createElement("span");
         pill.className = `status-pill ${statusClass}`.trim();
         pill.textContent = value;
-        if (statusTitle) pill.title = statusTitle;
         cell.append(pill);
       } else {
         cell.textContent = value;

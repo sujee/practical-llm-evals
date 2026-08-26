@@ -670,6 +670,10 @@ async function runBenchmarkSequence(result, config, signal, runOnce, render) {
         result.runs.push({ index: runIndex + 1, ...measuredRun });
       } catch (error) {
         if (signal.aborted) break;
+        console.error(
+          `[LLM Quick Bench] Benchmark run ${runIndex + 1} failed for ${result.modelId}.`,
+          error,
+        );
         result.errors.push({ run: runIndex + 1, message: error.message });
       }
       render();
@@ -682,7 +686,10 @@ async function runBenchmarkSequence(result, config, signal, runOnce, render) {
         : "error";
   } catch (error) {
     result.status = signal.aborted ? "cancelled" : "error";
-    if (!signal.aborted) result.errors.push({ run: "warmup", message: error.message });
+    if (!signal.aborted) {
+      console.error(`[LLM Quick Bench] Benchmark warm-up failed for ${result.modelId}.`, error);
+      result.errors.push({ run: "warmup", message: error.message });
+    }
   }
   result.finishedAt = new Date().toISOString();
   result.totalTestTimeMs = performance.now() - modelStartedAt;

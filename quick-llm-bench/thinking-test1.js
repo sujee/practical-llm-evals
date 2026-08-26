@@ -1,8 +1,8 @@
 // Thinking Test 1 - data-processing benchmark.
 // Each question generates a fresh randomized table of {id, name, score} rows
 // and asks the model to return the id and name of the row with the highest score.
-// Grading requires the final non-empty line to exactly match
-// "Final answer: <id>|<name>" and compares it (integer id, case-insensitive name) to the
+// Grading requires the entire response to be one line that exactly matches
+// "<id>|<name>" and compares it (integer id, case-insensitive name) to the
 // pre-computed answer. The prompt is regenerated per question from a deterministic
 // seed, so the model never sees the same table twice within a run.
 //
@@ -142,7 +142,7 @@ thinkingForm.addEventListener("submit", async (event) => {
       topP: 1,
       operation: "highest score",
       prompt: "regenerated per question from seeded random rows of {id, name, score}",
-      grading: "require final non-empty line to exactly match 'Final answer: <id>|<name>'; correct if integer id and case-insensitive name match expected",
+      grading: "require the entire response to be exactly one '<id>|<name>' line; correct if integer id and case-insensitive name match expected",
       percentile: "nearest rank",
     },
   });
@@ -261,12 +261,12 @@ async function runThinkingCompletion(modelId, task, config, outerSignal, include
     const parsedAnswer = extracted.ok ? `${extracted.id}|${extracted.name}` : null;
     const analysis = [];
     if (!extracted.ok) {
-      analysis.push("Format: BROKEN - could not extract a valid `Final answer: <id>|<name>` line.");
+      analysis.push("Format: BROKEN - the entire response was not exactly one `<id>|<name>` line.");
       analysis.push(`Expected: ${expectedAnswer}`);
       if (extracted.raw === null) {
-        analysis.push("Reason: no `Final answer:` line appeared in the model response.");
+        analysis.push("Reason: the model response was empty.");
       } else {
-        analysis.push(`Last \`Final answer:\` tail: "${extracted.raw}"`);
+        analysis.push(`Response: "${extracted.raw}"`);
         const parts = extracted.raw.split("|").map((p) => p.trim());
         if (parts.length !== 2) {
           analysis.push(`Reason: expected exactly one "|" separator (got ${parts.length} parts).`);
@@ -307,7 +307,7 @@ async function runThinkingCompletion(modelId, task, config, outerSignal, include
     const gradingBlock = [
       "--- GRADING ---",
       `Expected: ${measurement.expectedAnswer}`,
-      `Parsed:  ${measurement.parsedAnswer ?? "(no Final answer line found)"}`,
+      `Parsed:  ${measurement.parsedAnswer ?? "(response did not match <id>|<name>)"}`,
       `Correct:  ${measurement.correct}`,
     ].join("\n");
     thinkingRun.sampleExchange = {
@@ -404,13 +404,13 @@ function renderThinkingPrompt(rows, format) {
     "",
     table,
     "",
-    "Find the single row that has the HIGHEST score.",
-    "Briefly check the scores to confirm your choice, then end your response with one line in exactly this format:",
+    "Identify the single row that has the HIGHEST score.",
     "",
-    "Final answer: <id>|<name>",
+    "Your entire response must be exactly one line:",
+    "<id>|<name>",
     "",
-    "Replace <id> with the row's id (an integer) and <name> with the row's exact name.",
-    "Place nothing else on that final line, and do not wrap the answer in quotes or markdown.",
+    "Replace <id> and <name> with the selected row's values.",
+    "Output nothing else. Do not include reasoning, explanations, labels, markdown, or any text beyond the required answer.",
   ].join("\n");
 }
 
@@ -440,19 +440,11 @@ function serializeThinkingRows(rows, format) {
 
 function extractThinkingAnswer(contentText) {
   if (!contentText) return { ok: false, raw: null };
-  const lines = contentText.split(/\r?\n/);
-  while (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
-  // `raw` and the regex both look at the *final* non-empty line so the
-  // diagnostic and the grade stay consistent (originally `raw` was sampled
-  // from the last `Final answer:`-shaped line, which could differ from the
-  // line actually graded).
-  // Trims leading + trailing whitespace on the final line so models that
-  // indent or pad the answer aren't graded BROKEN for purely cosmetic spaces.
-  const finalLine = lines[lines.length - 1].trim();
-  const raw = finalLine.startsWith("Final answer:")
-    ? finalLine.slice("Final answer:".length).trim()
-    : null;
-  const match = finalLine.match(/^Final answer: ([1-9]\d*)\|([A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*)$/);
+  // The prompt requires the entire response to contain only the answer. Trim
+  // surrounding whitespace for transport/model cosmetics, but reject any
+  // explanation, label, markdown, or additional non-empty line.
+  const raw = contentText.trim();
+  const match = raw.match(/^([1-9]\d*)\|([A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*)$/);
   if (!match) return { ok: false, raw };
   const id = Number(match[1]);
   const name = match[2];
@@ -536,7 +528,7 @@ function renderThinkingResults() {
       : result.status === "partial" ? "partial"
       : result.status === "error" ? "error"
       : result.status === "queued" ? "" : "running";
-    const statusTitle = result.errors.map((error) => `${error.run}: ${error.message}`).join("\n");
+    const statusTitle = result.errors.length > 0 ? "Check console for errors." : "";
 
     const row = document.createElement("tr");
     thinkingColumnKeys.forEach((key) => {
@@ -544,10 +536,10 @@ function renderThinkingResults() {
       cell.hidden = !visibleThinkingColumns.has(key);
       cell.classList.toggle("sorted-column", thinkingSortState.key === key);
       if (key === "status") {
+        if (statusTitle) cell.title = statusTitle;
         const pill = document.createElement("span");
         pill.className = `status-pill ${statusClass}`.trim();
         pill.textContent = values.status;
-        if (statusTitle) pill.title = statusTitle;
         cell.append(pill);
       } else if (key === "accuracy") {
         cell.textContent = formatRatioPercent(accuracy.accuracy, 1, accuracy.correct, accuracy.total);
