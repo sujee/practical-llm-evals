@@ -51,6 +51,7 @@
   // Theme comes from the inline head script (localStorage or prefers-color-scheme)
   let theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
   let chart, chart2, chart3;
+  const FRONTIER_LINE = 'Frontier (largest context)';
 
   function initCharts() {
     if (chart) chart.dispose();
@@ -63,6 +64,9 @@
     chart2.setOption(buildOptionRelease());
     chart3 = echarts.init(document.getElementById('chart3'), theme === 'dark' ? 'dark' : null);
     chart3.setOption(buildOptionContext());
+    enableShiftIsolate(chart);
+    enableShiftIsolate(chart2);
+    enableShiftIsolate(chart3, [FRONTIER_LINE]);
   }
 
   // Shift+click a legend family to isolate it; Shift+click it again to restore all.
@@ -318,11 +322,6 @@
   }
 
   initCharts();
-
-  const FRONTIER_LINE = 'Frontier (largest context)';
-  enableShiftIsolate(chart);
-  enableShiftIsolate(chart2);
-  enableShiftIsolate(chart3, [FRONTIER_LINE]);
 
   const selMetric = document.getElementById('sel-metric');
   const sliderIntel = document.getElementById('slider-intel');
