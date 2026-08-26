@@ -187,7 +187,8 @@ resetBenchmarkResults();
 renderTable();
 updateModelResultsState();
 showAllColumnsButton.addEventListener("click", () => {
-  visibleBenchmarkColumns = new Set(benchmarkColumnKeys);
+  visibleBenchmarkColumns.clear();
+  benchmarkColumnKeys.forEach((key) => visibleBenchmarkColumns.add(key));
   saveVisibleBenchmarkColumns();
   syncBenchmarkColumnPicker();
   renderBenchmarkResults();
@@ -199,6 +200,10 @@ renderRequestTemplate();
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!isSecureEndpoint(endpointInput.value)) {
+    setStatus("Use an HTTPS endpoint (http://localhost is also allowed) so the API key isn't sent in cleartext.", true);
+    return;
+  }
   setStatus("Loading models…");
   setLoading(true);
 
@@ -296,15 +301,11 @@ benchmarkForm.addEventListener("submit", async (event) => {
   benchmarkAbortController = new AbortController();
   benchmarkStartedAtMs = performance.now();
   const runSeed = crypto.getRandomValues(new Uint32Array(1))[0];
-  benchmarkRun = {
-    status: "running",
-    startedAt: new Date().toISOString(),
-    provider: connection.provider,
-    endpoint: buildChatCompletionsUrl(endpointInput.value),
-    environment: {
-      userAgent: navigator.userAgent,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    },
+  benchmarkRun = createBenchmarkRun({
+    selectedModels,
+    connection,
+    config,
+    runSeed,
     methodology: {
       temperature: 0,
       topP: 1,
@@ -313,22 +314,7 @@ benchmarkForm.addEventListener("submit", async (event) => {
       endToEndLatency: "request dispatch to response stream close",
       percentile: "nearest rank",
     },
-    sampleExchange: null,
-    runSeed,
-    config,
-    results: selectedModels.map((model) => ({
-      modelId: model.modelId,
-      pricing: {
-        inputPerMillionTokens: model.inputPrice,
-        outputPerMillionTokens: model.outputPrice,
-      },
-      status: "queued",
-      warmup: null,
-      runs: [],
-      errors: [],
-      totalTestTimeMs: null,
-    })),
-  };
+  });
   exportCsvButton.disabled = false;
   exportJsonButton.disabled = false;
   const scheduledResults = shuffleWithSeed([...benchmarkRun.results], runSeed);
@@ -366,7 +352,7 @@ benchmarkForm.addEventListener("submit", async (event) => {
   }
 });
 
-function setActiveTab(activeTab, moveFocus = false) {
+function setActiveTab(activeTab) {
   tabs.forEach((tab) => {
     const isActive = tab === activeTab;
     tab.setAttribute("aria-selected", String(isActive));
@@ -375,31 +361,12 @@ function setActiveTab(activeTab, moveFocus = false) {
   tabPanels.forEach((panel) => {
     panel.hidden = panel.id !== activeTab.getAttribute("aria-controls");
   });
-  if (moveFocus) activeTab.focus();
 }
 
 function buildModelsUrl(rawEndpoint, provider) {
   const url = buildApiUrl(rawEndpoint, "models");
   if (provider === "nebius") url.searchParams.set("verbose", "true");
   return url.toString();
-}
-
-function buildApiUrl(rawEndpoint, resourcePath) {
-  const url = new URL(rawEndpoint.trim());
-  const basePath = url.pathname
-    .replace(/\/(models|chat\/completions)\/?$/i, "")
-    .replace(/\/+$/, "");
-  url.pathname = `${basePath}/${resourcePath}`;
-  url.hash = "";
-  return url;
-}
-
-function buildApiHeaders(apiKey, { accept, contentType } = {}) {
-  const headers = {};
-  if (accept) headers.Accept = accept;
-  if (contentType) headers["Content-Type"] = contentType;
-  headers.Authorization = `Bearer ${apiKey}`;
-  return headers;
 }
 
 async function readResponse(response) {
@@ -616,6 +583,7 @@ function parseParameterCount(value) {
 
 function toNumber(value) {
   if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "boolean") return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
@@ -629,6 +597,10 @@ function getPricePerMillion(explicitPerMillion, ambiguousPrice) {
 
 function pricePerMillion(value, isAlreadyPerMillion = false) {
   const price = toNumber(value);
+  // `null` means "no price published" (downstream treat as Unpriced).
+  // A literal `0` means "free at point of use" (downstream treat as $0.00).
+  // `usage.cost === null` vs `=== 0` distinguishes the two; downstream UI
+  // prints "Unpriced" / "$0.0000" accordingly.
   if (price === null || price === 0) return price;
   if (isAlreadyPerMillion) return price;
 
@@ -636,6 +608,19 @@ function pricePerMillion(value, isAlreadyPerMillion = false) {
   // are normally per-token amounts; explicit *_per_million_tokens fields skip
   // this heuristic via getPricePerMillion().
   return Math.abs(price) < 0.001 ? price * 1_000_000 : price;
+}
+
+let _warnedAboutMissingThinkingScript = false;
+function isThinkingBenchmarkRunning() {
+  try {
+    return thinkingAbortController != null;
+  } catch (error) {
+    if (!_warnedAboutMissingThinkingScript && error instanceof ReferenceError) {
+      _warnedAboutMissingThinkingScript = true;
+      console.warn("[LLM Quick Bench] thinking-test1.js failed to load; Raw Speed Test 1 will run but cross-benchmark locking against Thinking Test 1 is disabled.");
+    }
+    return false;
+  }
 }
 
 function renderTable() {
@@ -684,7 +669,7 @@ function renderTable() {
         checkbox.type = "checkbox";
         checkbox.className = "model-select";
         checkbox.checked = model.selected;
-        checkbox.disabled = modelsLoading || benchmarkAbortController != null;
+        checkbox.disabled = modelsLoading || benchmarkAbortController != null || isThinkingBenchmarkRunning();
         checkbox.setAttribute("aria-label", `Select ${model.modelId} for benchmarking`);
         checkbox.addEventListener("change", () => {
           model.selected = checkbox.checked;
@@ -800,275 +785,61 @@ function notifySelectionChanged() {
 }
 
 async function benchmarkModel(result, config, signal, connection) {
-  if (signal.aborted) {
-    result.status = "cancelled";
-    renderBenchmarkResults();
-    return;
-  }
-  const modelStartedAt = performance.now();
-  result.startedAtMs = modelStartedAt;
-  result.startedAt = new Date().toISOString();
-  result.status = "warming";
-  renderBenchmarkResults();
-
-  let includeUsage = true;
-  try {
-    try {
-      result.warmup = await runStreamingCompletion(result.modelId, config, signal, true, "warmup", connection);
-    } catch (error) {
-      if (!(error instanceof HttpError) || error.status !== 400) throw error;
-      includeUsage = false;
-      result.warmup = await runStreamingCompletion(result.modelId, config, signal, false, "warmup-fallback", connection);
-    }
-
-    for (let runIndex = 0; runIndex < config.runs; runIndex += 1) {
-      if (signal.aborted) break;
-      result.status = `run ${runIndex + 1}/${config.runs}`;
-      renderBenchmarkResults();
-      try {
-        const measuredRun = await runStreamingCompletion(
-          result.modelId,
-          config,
-          signal,
-          includeUsage,
-          `run-${runIndex + 1}`,
-          connection,
-        );
-        result.runs.push({ index: runIndex + 1, ...measuredRun });
-      } catch (error) {
-        if (signal.aborted) break;
-        result.errors.push({ run: runIndex + 1, message: error.message });
-      }
-      renderBenchmarkResults();
-    }
-
-    result.status = signal.aborted
-      ? "cancelled"
-      : result.runs.length > 0
-        ? result.errors.length > 0 ? "partial" : "complete"
-        : "error";
-  } catch (error) {
-    result.status = signal.aborted ? "cancelled" : "error";
-    if (!signal.aborted) result.errors.push({ run: "warmup", message: error.message });
-  }
-  result.finishedAt = new Date().toISOString();
-  result.totalTestTimeMs = performance.now() - modelStartedAt;
-  renderBenchmarkResults();
+  await runBenchmarkSequence(
+    result,
+    config,
+    signal,
+    ({ label, includeUsage }) => runStreamingCompletion(
+      result.modelId,
+      config,
+      signal,
+      includeUsage,
+      label,
+      connection,
+    ),
+    renderBenchmarkResults,
+  );
 }
 
 async function runStreamingCompletion(modelId, config, outerSignal, includeUsage, runLabel, connection) {
-  const requestController = new AbortController();
-  const abortFromOuter = () => requestController.abort(outerSignal.reason);
-  outerSignal.addEventListener("abort", abortFromOuter, { once: true });
-  const timeoutId = setTimeout(() => requestController.abort(new DOMException("Request timed out", "TimeoutError")), config.timeoutMs);
-  const startedAt = performance.now();
-
-  try {
-    const body = buildBenchmarkRequestBody(modelId, config, includeUsage);
-
-    const requestUrl = buildChatCompletionsUrl(connection.endpoint);
-    const rawRequestText = formatBenchmarkRequest(requestUrl, body);
-    logBenchmarkRaw(config, `${modelId} · ${runLabel} · RAW REQUEST`, rawRequestText);
-
-    const response = await fetch(requestUrl, {
-      method: "POST",
-      headers: buildApiHeaders(connection.apiKey, {
-        accept: "text/event-stream",
-        contentType: "application/json",
-      }),
-      body: JSON.stringify(body),
-      signal: requestController.signal,
-    });
-
-    const responseHeaderLines = [`HTTP ${response.status} ${response.statusText}`.trim()];
-    response.headers.forEach((value, key) => responseHeaderLines.push(`${key}: ${value}`));
-    logBenchmarkRaw(
-      config,
-      `${modelId} · ${runLabel} · RAW RESPONSE HEADERS`,
-      responseHeaderLines.join("\n"),
-    );
-
-    if (!response.ok) {
-      const rawErrorBody = await response.text();
-      logBenchmarkRaw(config, `${modelId} · ${runLabel} · RAW RESPONSE BODY`, rawErrorBody);
-      let payload;
-      try {
-        payload = rawErrorBody ? JSON.parse(rawErrorBody) : {};
-      } catch {
-        payload = { message: rawErrorBody };
-      }
-      const message = payload?.error?.message || payload?.message || response.statusText;
-      throw new HttpError(response.status, `${response.status} ${message}`.trim());
-    }
-    if (!response.body) throw new Error("The endpoint returned no streaming response body.");
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let firstTokenAt = null;
-    let outputText = "";
-    let reasoningText = "";
-    let contentText = "";
-    let rawChunkNumber = 0;
-    const rawResponseChunks = [];
-    let promptTokens = null;
-    let completionTokens = null;
-    let finishReason = null;
-
-    const consumeLine = (line) => {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("data:")) return;
-      const data = trimmed.slice(5).trim();
-      if (!data) return;
-      if (data === "[DONE]") return;
-      let chunk;
-      try {
-        chunk = JSON.parse(data);
-      } catch {
-        return;
-      }
-      if (Number.isFinite(chunk.usage?.completion_tokens)) {
-        completionTokens = chunk.usage.completion_tokens;
-      }
-      if (Number.isFinite(chunk.usage?.prompt_tokens)) {
-        promptTokens = chunk.usage.prompt_tokens;
-      }
-      if (chunk.choices?.[0]?.finish_reason) {
-        finishReason = chunk.choices[0].finish_reason;
-      }
-      const delta = chunk.choices?.[0]?.delta;
-      const contentDelta = typeof delta?.content === "string" ? delta.content : "";
-      const reasoningDelta = typeof delta?.reasoning_content === "string"
-        ? delta.reasoning_content
-        : typeof delta?.reasoning === "string" ? delta.reasoning : "";
-      if (contentDelta || reasoningDelta) {
-        if (firstTokenAt === null) firstTokenAt = performance.now();
-        contentText += contentDelta;
-        reasoningText += reasoningDelta;
-        outputText += reasoningDelta + contentDelta;
-      }
+  const stream = await runStreamingChatCompletion({
+    modelId,
+    config,
+    outerSignal,
+    runLabel,
+    connection,
+    body: buildBenchmarkRequestBody(modelId, config, includeUsage, connection.provider),
+    logName: "LLM Quick Bench",
+  });
+  const measurement = {
+    ...stream.measurement,
+    outputHealth: assessOutputHealth({
+      contentText: stream.contentText,
+      reasoningText: stream.reasoningText,
+      completionTokens: stream.measurement.completionTokens,
+      finishReason: stream.measurement.finishReason,
+      maxTokens: config.maxTokens,
+      disableThinking: config.disableThinking,
+      fixedOutput: config.fixedOutput,
+    }),
+  };
+  if (runLabel.startsWith("run-") && benchmarkRun && !benchmarkRun.sampleExchange) {
+    benchmarkRun.sampleExchange = {
+      modelId,
+      runLabel,
+      capturedAt: new Date().toISOString(),
+      request: stream.request,
+      response: stream.response,
+      consolidatedOutput: stream.consolidatedOutput,
     };
-
-    while (true) {
-      const { value, done } = await reader.read();
-      const rawResponseChunk = decoder.decode(value || new Uint8Array(), { stream: !done });
-      if (rawResponseChunk) {
-        rawChunkNumber += 1;
-        rawResponseChunks.push(rawResponseChunk);
-        logBenchmarkRaw(
-          config,
-          `${modelId} · ${runLabel} · RAW RESPONSE CHUNK #${rawChunkNumber}`,
-          rawResponseChunk,
-        );
-      }
-      buffer += rawResponseChunk;
-      const lines = buffer.split(/\r?\n/);
-      buffer = lines.pop() || "";
-      lines.forEach(consumeLine);
-      if (done) break;
-    }
-    if (buffer) consumeLine(buffer);
-
-    const assembledSections = [];
-    if (reasoningText) assembledSections.push(`--- REASONING ---\n${reasoningText}`);
-    if (contentText) assembledSections.push(`--- FINAL CONTENT ---\n${contentText}`);
-    logBenchmarkRaw(
-      config,
-      `${modelId} · ${runLabel} · ASSEMBLED RESPONSE`,
-      assembledSections.join("\n\n") || "[No generated text]",
-    );
-
-    const finishedAt = performance.now();
-    if (firstTokenAt === null) throw new Error("The stream completed without generated text.");
-    const completionTokenCountEstimated = completionTokens === null;
-    const promptTokenCountEstimated = promptTokens === null;
-    if (config.requireServerTokenCounts && (completionTokenCountEstimated || promptTokenCountEstimated)) {
-      throw new Error("The endpoint omitted prompt or completion token usage required by this benchmark.");
-    }
-    if (completionTokenCountEstimated) completionTokens = estimateTokenCount(outputText);
-    if (promptTokenCountEstimated) promptTokens = estimatePromptTokenCount(body.messages);
-    const generationSeconds = Math.max((finishedAt - firstTokenAt) / 1000, 0.001);
-
-    const measurement = {
-      ttftMs: firstTokenAt - startedAt,
-      endToEndLatencyMs: finishedAt - startedAt,
-      tokensPerSecond: completionTokens / generationSeconds,
-      promptTokens,
-      completionTokens,
-      totalTokens: promptTokens + completionTokens,
-      tokenCountEstimated: completionTokenCountEstimated || promptTokenCountEstimated,
-      promptTokenCountEstimated,
-      completionTokenCountEstimated,
-      outputCharacters: outputText.length,
-      reasoningCharacters: reasoningText.length,
-      contentCharacters: contentText.length,
-      responseChunks: rawChunkNumber,
-      finishReason,
-      outputHealth: assessOutputHealth({
-        contentText,
-        reasoningText,
-        completionTokens,
-        finishReason,
-        maxTokens: config.maxTokens,
-        disableThinking: config.disableThinking,
-        fixedOutput: config.fixedOutput,
-      }),
-    };
-    if (runLabel.startsWith("run-") && benchmarkRun && !benchmarkRun.sampleExchange) {
-      benchmarkRun.sampleExchange = {
-        modelId,
-        runLabel,
-        capturedAt: new Date().toISOString(),
-        request: rawRequestText,
-        response: [
-          responseHeaderLines.join("\n"),
-          "",
-          ...rawResponseChunks.flatMap((chunk, index) => [
-            `[chunk ${index + 1}]`,
-            chunk,
-          ]),
-        ].join("\n"),
-        consolidatedOutput: assembledSections.join("\n\n") || "[No generated text]",
-      };
-      renderMethodologySample();
-    }
-    logBenchmarkEvent(config, "completion summary", {
-      model: modelId,
-      run: runLabel,
-      measurement,
-    });
-    return measurement;
-  } catch (error) {
-    logBenchmarkEvent(config, "request error", {
-      model: modelId,
-      run: runLabel,
-      name: error.name,
-      message: error.message,
-    });
-    if (requestController.signal.aborted && !outerSignal.aborted) {
-      throw new Error(`Timed out after ${Math.round(config.timeoutMs / 1000)} seconds.`);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
-    outerSignal.removeEventListener("abort", abortFromOuter);
+    renderMethodologySample();
   }
-}
-
-function logBenchmarkEvent(config, event, details) {
-  if (!config.logToConsole) return;
-  let serializedDetails;
-  try {
-    serializedDetails = JSON.stringify(details, null, 2);
-  } catch {
-    serializedDetails = String(details);
-  }
-  console.log(`[LLM Quick Bench] ${event}\n${serializedDetails}`);
-}
-
-function logBenchmarkRaw(config, label, rawData) {
-  if (!config.logToConsole) return;
-  console.log(`[LLM Quick Bench] ${label}\n${rawData}`);
+  logBenchmarkEvent(config, "LLM Quick Bench", "completion summary", {
+    model: modelId,
+    run: runLabel,
+    measurement,
+  });
+  return measurement;
 }
 
 function assessOutputHealth({ contentText, reasoningText, completionTokens, finishReason, maxTokens, disableThinking, fixedOutput }) {
@@ -1098,46 +869,6 @@ function assessOutputHealth({ contentText, reasoningText, completionTokens, fini
   };
 }
 
-class HttpError extends Error {
-  constructor(statusCode, message) {
-    super(message);
-    this.status = statusCode;
-  }
-}
-
-function buildChatCompletionsUrl(rawEndpoint) {
-  const url = buildApiUrl(rawEndpoint, "chat/completions");
-  return url.toString();
-}
-
-async function runWithConcurrency(items, concurrency, worker) {
-  let nextIndex = 0;
-  async function runWorker() {
-    while (nextIndex < items.length) {
-      const item = items[nextIndex];
-      nextIndex += 1;
-      await worker(item);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, runWorker));
-}
-
-function shuffleWithSeed(items, seed) {
-  let state = seed >>> 0;
-  const random = () => {
-    state += 0x6D2B79F5;
-    let value = state;
-    value = Math.imul(value ^ (value >>> 15), value | 1);
-    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
-    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
-  };
-  for (let index = items.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(random() * (index + 1));
-    [items[index], items[swapIndex]] = [items[swapIndex], items[index]];
-  }
-  return items;
-}
-
 function renderBenchmarkResults() {
   if (!benchmarkRun) return;
   benchmarkBody.replaceChildren();
@@ -1154,7 +885,7 @@ function renderBenchmarkResults() {
   summaryOutputTokens.textContent = formatInteger(runUsage.completionTokens);
   summaryTotalTokens.textContent = formatInteger(runUsage.totalTokens);
   summaryCost.textContent = runUsage.requestCount === 0
-    ? "—"
+    ? "-"
     : runUsage.pricedUsageCount === 0
       ? "Unpriced"
       : `${formatCost(runUsage.cost)}${runUsage.hasUnpriced ? " + unpriced" : ""}`;
@@ -1163,14 +894,7 @@ function renderBenchmarkResults() {
     : "Warm-up and measured requests are included.";
 
   updateBenchmarkSortHeaders();
-  const sortedResults = [...benchmarkRun.results].sort((left, right) => {
-    const leftValue = getBenchmarkSortValue(left, benchmarkSortState.key);
-    const rightValue = getBenchmarkSortValue(right, benchmarkSortState.key);
-    if (isMissing(leftValue)) return isMissing(rightValue) ? 0 : 1;
-    if (isMissing(rightValue)) return -1;
-    const comparison = compareValues(leftValue, rightValue);
-    return benchmarkSortState.direction === "ascending" ? comparison : -comparison;
-  });
+  const sortedResults = getSortedBenchmarkResults();
 
   sortedResults.forEach((result) => {
     const summary = summarizeRuns(result.runs);
@@ -1184,7 +908,7 @@ function renderBenchmarkResults() {
       ? "complete"
       : result.status === "partial" ? "partial"
       : result.status === "error" ? "error" : result.status === "queued" ? "" : "running";
-    const statusTitle = result.errors.map((error) => `${error.run}: ${error.message}`).join("\n");
+    const statusTitle = result.errors.length > 0 ? "Check console for errors." : "";
     const liveTestTimeMs = result.totalTestTimeMs ?? getBenchmarkElapsedMs(result);
     const values = [
       result.modelId,
@@ -1197,9 +921,9 @@ function renderBenchmarkResults() {
       formatMilliseconds(summary.e2eP95),
       formatDuration(liveTestTimeMs),
       usage.requestCount === 0
-        ? "—"
+        ? "-"
         : `${formatInteger(usage.totalTokens)} (${formatInteger(usage.promptTokens)} in / ${formatInteger(usage.completionTokens)} out)${usage.hasEstimated ? " *" : ""}`,
-      usage.requestCount === 0 ? "—" : usage.cost === null ? "Unpriced" : formatCost(usage.cost),
+      usage.requestCount === 0 ? "-" : usage.cost === null ? "Unpriced" : formatCost(usage.cost),
     ];
     values.forEach((value, index) => {
       const cell = document.createElement("td");
@@ -1207,10 +931,10 @@ function renderBenchmarkResults() {
       cell.hidden = !visibleBenchmarkColumns.has(columnKey);
       cell.classList.toggle("sorted-column", benchmarkSortState.key === columnKey);
       if (index === 1) {
+        if (statusTitle) cell.title = statusTitle;
         const pill = document.createElement("span");
         pill.className = `status-pill ${statusClass}`.trim();
         pill.textContent = value;
-        if (statusTitle) pill.title = statusTitle;
         cell.append(pill);
       } else {
         cell.textContent = value;
@@ -1233,11 +957,11 @@ function renderBenchmarkResults() {
 function resetBenchmarkResults() {
   benchmarkRun = null;
   benchmarkBody.replaceChildren();
-  summaryTime.textContent = "—";
-  summaryInputTokens.textContent = "—";
-  summaryOutputTokens.textContent = "—";
-  summaryTotalTokens.textContent = "—";
-  summaryCost.textContent = "—";
+  summaryTime.textContent = "-";
+  summaryInputTokens.textContent = "-";
+  summaryOutputTokens.textContent = "-";
+  summaryTotalTokens.textContent = "-";
+  summaryCost.textContent = "-";
   summaryCost.removeAttribute("title");
   usageNote.textContent = "Results will appear here after a raw speed benchmark run.";
   exportCsvButton.disabled = true;
@@ -1247,83 +971,47 @@ function resetBenchmarkResults() {
 }
 
 function sortBenchmarkBy(key) {
-  benchmarkSortState = {
-    key,
-    direction: benchmarkSortState.key === key && benchmarkSortState.direction === "ascending"
-      ? "descending"
-      : "ascending",
-  };
+  benchmarkSortState = nextSortState(benchmarkSortState, key);
   renderBenchmarkResults();
 }
 
 function updateBenchmarkSortHeaders() {
-  benchmarkSortHeaders.forEach((header) => {
-    header.hidden = !visibleBenchmarkColumns.has(header.dataset.benchmarkColumn);
-    const isActive = header.dataset.benchmarkColumn === benchmarkSortState.key;
-    header.classList.toggle("sorted-column", isActive);
-    header.setAttribute("aria-sort", isActive ? benchmarkSortState.direction : "none");
-    header.querySelector(".sort-icon").textContent = isActive
-      ? benchmarkSortState.direction === "ascending" ? "↑" : "↓"
-      : "↕";
+  updateSortHeaders({
+    headers: benchmarkSortHeaders,
+    columnAttr: "benchmarkColumn",
+    visibleColumns: visibleBenchmarkColumns,
+    sortState: benchmarkSortState,
   });
 }
 
 function initializeBenchmarkColumnPicker() {
-  benchmarkSortHeaders.forEach((header) => {
-    const key = header.dataset.benchmarkColumn;
-    const label = document.createElement("label");
-    label.className = "column-option";
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.value = key;
-    checkbox.checked = visibleBenchmarkColumns.has(key);
-    const text = document.createElement("span");
-    text.textContent = header.querySelector("button span").textContent;
-    checkbox.addEventListener("change", () => {
-      if (checkbox.checked) {
-        visibleBenchmarkColumns.add(key);
-      } else if (visibleBenchmarkColumns.size === 1) {
-        checkbox.checked = true;
-        return;
-      } else {
-        visibleBenchmarkColumns.delete(key);
-      }
-      if (!visibleBenchmarkColumns.has(benchmarkSortState.key)) {
-        benchmarkSortState = { key: [...visibleBenchmarkColumns][0], direction: "ascending" };
-      }
-      saveVisibleBenchmarkColumns();
-      renderBenchmarkResults();
-    });
-    label.append(checkbox, text);
-    benchmarkColumnOptions.append(label);
+  buildColumnPicker({
+    headers: benchmarkSortHeaders,
+    columnAttr: "benchmarkColumn",
+    container: benchmarkColumnOptions,
+    visibleColumns: visibleBenchmarkColumns,
+    onChange: onBenchmarkColumnVisibilityChange,
   });
+}
+
+function onBenchmarkColumnVisibilityChange(visibleColumns) {
+  if (!visibleColumns.has(benchmarkSortState.key)) {
+    benchmarkSortState = { key: [...visibleColumns][0], direction: "ascending" };
+  }
+  saveVisibleBenchmarkColumns();
+  renderBenchmarkResults();
 }
 
 function syncBenchmarkColumnPicker() {
-  benchmarkColumnOptions.querySelectorAll("input").forEach((checkbox) => {
-    checkbox.checked = visibleBenchmarkColumns.has(checkbox.value);
-  });
+  syncColumnPicker(benchmarkColumnOptions, visibleBenchmarkColumns);
 }
 
 function loadVisibleBenchmarkColumns() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(benchmarkColumnPreferenceKey));
-    if (Array.isArray(saved)) {
-      const validColumns = saved.filter((key) => benchmarkColumnKeys.includes(key));
-      if (validColumns.length > 0) return new Set(validColumns);
-    }
-  } catch {
-    // Storage may be unavailable in strict privacy contexts; use defaults.
-  }
-  return new Set(benchmarkColumnKeys);
+  return loadVisibleColumnSet(benchmarkColumnPreferenceKey, benchmarkColumnKeys);
 }
 
 function saveVisibleBenchmarkColumns() {
-  try {
-    localStorage.setItem(benchmarkColumnPreferenceKey, JSON.stringify([...visibleBenchmarkColumns]));
-  } catch {
-    // Column selection still works for this session when storage is unavailable.
-  }
+  saveVisibleColumnSet(benchmarkColumnPreferenceKey, visibleBenchmarkColumns);
 }
 
 function getBenchmarkSortValue(result, key) {
@@ -1360,17 +1048,6 @@ function formatBenchmarkResultStatus(result, totalRuns) {
   }
 }
 
-function summarizeRuns(runs) {
-  return {
-    ttftMedian: percentile(runs.map((run) => run.ttftMs), 0.5),
-    ttftP95: percentile(runs.map((run) => run.ttftMs), 0.95),
-    e2eMedian: percentile(runs.map((run) => run.endToEndLatencyMs), 0.5),
-    e2eP95: percentile(runs.map((run) => run.endToEndLatencyMs), 0.95),
-    tpsMedian: percentile(runs.map((run) => run.tokensPerSecond), 0.5),
-    tpsP95: percentile(runs.map((run) => run.tokensPerSecond), 0.95),
-  };
-}
-
 function summarizeOutputHealth(runs) {
   const healthy = runs.filter((run) => run.outputHealth?.status === "healthy").length;
   return {
@@ -1381,65 +1058,18 @@ function summarizeOutputHealth(runs) {
   };
 }
 
-function summarizeBenchmarkUsage(result) {
-  const requests = [result.warmup, ...result.runs].filter(Boolean);
-  const promptTokens = requests.reduce((sum, request) => sum + request.promptTokens, 0);
-  const completionTokens = requests.reduce((sum, request) => sum + request.completionTokens, 0);
-  const inputPrice = result.pricing?.inputPerMillionTokens;
-  const outputPrice = result.pricing?.outputPerMillionTokens;
-  const hasPricing = inputPrice != null && outputPrice != null;
-  return {
-    requestCount: requests.length,
-    promptTokens,
-    completionTokens,
-    totalTokens: promptTokens + completionTokens,
-    hasEstimated: requests.some((request) => request.tokenCountEstimated),
-    cost: requests.length > 0 && hasPricing
-      ? ((promptTokens * inputPrice) + (completionTokens * outputPrice)) / 1_000_000
-      : null,
-  };
-}
-
-function summarizeRunUsage(results) {
-  return results.reduce((total, result) => {
-    const usage = summarizeBenchmarkUsage(result);
-    total.promptTokens += usage.promptTokens;
-    total.completionTokens += usage.completionTokens;
-    total.totalTokens += usage.totalTokens;
-    total.cost += usage.cost ?? 0;
-    total.requestCount += usage.requestCount;
-    if (usage.requestCount > 0 && usage.cost !== null) total.pricedUsageCount += 1;
-    if (usage.hasEstimated) total.estimatedModelCount += 1;
-    total.hasEstimated ||= usage.hasEstimated;
-    total.hasUnpriced ||= usage.requestCount > 0 && usage.cost === null;
-    return total;
-  }, {
-    promptTokens: 0,
-    completionTokens: 0,
-    totalTokens: 0,
-    cost: 0,
-    requestCount: 0,
-    pricedUsageCount: 0,
-    estimatedModelCount: 0,
-    hasEstimated: false,
-    hasUnpriced: false,
-  });
-}
-
-function percentile(values, probability) {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((left, right) => left - right);
-  return sorted[Math.max(0, Math.ceil(probability * sorted.length) - 1)];
-}
-
-function buildBenchmarkRequestBody(modelId, config, includeUsage = true) {
+function buildBenchmarkRequestBody(modelId, config, includeUsage = true, provider = null) {
+  // OpenAI newer endpoints reject the legacy `max_tokens` field; vLLM and most
+  // OpenAI-compatible servers accept it. Pick the field name by provider so
+  // the request body works against either family.
+  const outputLimitField = provider === "openai" ? "max_completion_tokens" : "max_tokens";
   const body = {
     model: modelId,
     messages: buildBenchmarkMessages(config.prompt),
     stream: true,
     temperature: 0,
     top_p: 1,
-    max_tokens: config.maxTokens,
+    [outputLimitField]: config.maxTokens,
   };
   if (includeUsage) body.stream_options = { include_usage: true };
   if (config.disableThinking) {
@@ -1450,19 +1080,6 @@ function buildBenchmarkRequestBody(modelId, config, includeUsage = true) {
     body.ignore_eos = true;
   }
   return body;
-}
-
-function formatBenchmarkRequest(requestUrl, body) {
-  const headers = buildApiHeaders("[REDACTED]", {
-    accept: "text/event-stream",
-    contentType: "application/json",
-  });
-  return [
-    `POST ${requestUrl}`,
-    ...Object.entries(headers).map(([name, value]) => `${name}: ${value}`),
-    "",
-    JSON.stringify(body, null, 2),
-  ].join("\n");
 }
 
 function buildBenchmarkMessages(prompt) {
@@ -1478,7 +1095,7 @@ function renderRequestTemplate() {
       fixedOutput: fixedOutputInput.checked,
     };
     const requestUrl = buildChatCompletionsUrl(endpointInput.value);
-    const body = buildBenchmarkRequestBody("<selected-model>", config);
+    const body = buildBenchmarkRequestBody("<selected-model>", config, true, providerSelect.value);
     requestTemplateCode.textContent = formatBenchmarkRequest(requestUrl, body);
   } catch {
     requestTemplateCode.textContent = "Enter a valid API endpoint to preview the benchmark request.";
@@ -1506,41 +1123,8 @@ function renderMethodologySample() {
   sampleOutputCode.textContent = sample.consolidatedOutput;
 }
 
-function estimateTokenCount(text) {
-  return Math.max(1, Math.round(text.length / 4));
-}
-
-function estimatePromptTokenCount(messages) {
-  const contentTokens = messages.reduce((sum, message) => sum + estimateTokenCount(message.content), 0);
-  return contentTokens + (messages.length * 4) + 2;
-}
-
-function clampInteger(value, minimum, maximum) {
-  return Math.min(maximum, Math.max(minimum, Math.round(Number(value) || minimum)));
-}
-
-function formatMilliseconds(value) {
-  return value === null ? "—" : `${Math.round(value).toLocaleString()} ms`;
-}
-
-function formatRate(value) {
-  return value === null ? "—" : `${value.toFixed(1)} tok/s`;
-}
-
-function formatDuration(value) {
-  if (value === null || value === undefined) return "—";
-  const seconds = value / 1000;
-  if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 2 : 1)} s`;
-  const minutes = Math.floor(seconds / 60);
-  return `${minutes}m ${(seconds % 60).toFixed(1)}s`;
-}
-
 function getBenchmarkElapsedMs(result) {
-  if (!result.startedAtMs) return null;
-  if (result.status === "queued" || result.status === "warming" || /^run \d+\/\d+$/i.test(result.status)) {
-    return performance.now() - result.startedAtMs;
-  }
-  return null;
+  return getLiveElapsedMs(result);
 }
 
 function startBenchmarkClock() {
@@ -1555,21 +1139,6 @@ function stopBenchmarkClock() {
     clearInterval(benchmarkClockInterval);
     benchmarkClockInterval = null;
   }
-}
-
-function formatInteger(value) {
-  return Math.round(value).toLocaleString();
-}
-
-function formatCost(value) {
-  if (value === null || value === undefined) return "—";
-  if (value > 0 && value < 0.000001) return "<$0.000001";
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 4,
-    maximumFractionDigits: 6,
-  }).format(value);
 }
 
 function setBenchmarkRunning(isRunning) {
@@ -1630,50 +1199,36 @@ function exportModelsJson() {
 
 function exportBenchmarkCsv() {
   if (!benchmarkRun) return;
-  const exportColumns = getVisibleBenchmarkExportColumns();
-  const header = exportColumns.map((column) => column.label);
-  const rows = getSortedBenchmarkResults().map((result) => (
-    exportColumns.map((column) => getBenchmarkSortValue(result, column.key))
-  ));
-  rows.push(exportColumns.map((column) => getBenchmarkTotalValue(column.key)));
-  downloadFile(`llm-benchmark-${fileTimestamp()}.csv`, [header, ...rows].map(toCsvRow).join("\n"), "text/csv");
+  exportBenchmarkCsvFile({
+    filenamePrefix: "llm-benchmark",
+    columns: getVisibleBenchmarkExportColumns(),
+    results: getSortedBenchmarkResults(),
+    getValue: getBenchmarkSortValue,
+    getTotal: getBenchmarkTotalValue,
+  });
 }
 
 function exportBenchmarkJson() {
   if (!benchmarkRun) return;
-  const exportColumns = getVisibleBenchmarkExportColumns();
-  const toSelectedObject = (result) => Object.fromEntries(
-    exportColumns.map((column) => [column.key, getBenchmarkSortValue(result, column.key)]),
-  );
-  const payload = {
-    exportedAt: new Date().toISOString(),
-    selectedColumns: exportColumns.map((column) => column.key),
-    results: getSortedBenchmarkResults().map(toSelectedObject),
-    total: Object.fromEntries(
-      exportColumns.map((column) => [column.key, getBenchmarkTotalValue(column.key)]),
-    ),
-  };
-  downloadFile(`llm-benchmark-${fileTimestamp()}.json`, JSON.stringify(payload, null, 2), "application/json");
+  exportBenchmarkJsonFile({
+    filenamePrefix: "llm-benchmark",
+    columns: getVisibleBenchmarkExportColumns(),
+    results: getSortedBenchmarkResults(),
+    getValue: getBenchmarkSortValue,
+    getTotal: getBenchmarkTotalValue,
+  });
 }
 
 function getVisibleBenchmarkExportColumns() {
-  return benchmarkSortHeaders
-    .filter((header) => visibleBenchmarkColumns.has(header.dataset.benchmarkColumn))
-    .map((header) => ({
-      key: header.dataset.benchmarkColumn,
-      label: header.querySelector("button span").textContent,
-    }));
+  return getVisibleExportColumns(
+    benchmarkSortHeaders,
+    visibleBenchmarkColumns,
+    "benchmarkColumn",
+  );
 }
 
 function getSortedBenchmarkResults() {
-  return [...benchmarkRun.results].sort((left, right) => {
-    const leftValue = getBenchmarkSortValue(left, benchmarkSortState.key);
-    const rightValue = getBenchmarkSortValue(right, benchmarkSortState.key);
-    if (isMissing(leftValue)) return isMissing(rightValue) ? 0 : 1;
-    if (isMissing(rightValue)) return -1;
-    const comparison = compareValues(leftValue, rightValue);
-    return benchmarkSortState.direction === "ascending" ? comparison : -comparison;
-  });
+  return sortRowsByState(benchmarkRun.results, getBenchmarkSortValue, benchmarkSortState);
 }
 
 function getBenchmarkTotalValue(key) {
@@ -1695,49 +1250,13 @@ function getBenchmarkTotalValue(key) {
 }
 
 
-function toCsvRow(values) {
-  return values.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",");
-}
-
-function fileTimestamp() {
-  return new Date().toISOString().replaceAll(":", "-").replace(/\.\d{3}Z$/, "Z");
-}
-
-function downloadFile(filename, contents, type) {
-  const url = URL.createObjectURL(new Blob([contents], { type }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
 function sortBy(column) {
-  sortState = {
-    key: column,
-    direction: sortState.key === column && sortState.direction === "ascending"
-      ? "descending"
-      : "ascending",
-  };
+  sortState = nextSortState(sortState, column);
   renderTable();
 }
 
-function compareValues(left, right) {
-  if (left === right) return 0;
-  if (typeof left === "number" && typeof right === "number") return left - right;
-  return normalizedValue(left).localeCompare(normalizedValue(right), undefined, {
-    numeric: true,
-    sensitivity: "base",
-  });
-}
-
-function normalizedValue(value) {
-  return String(value);
-}
-
 function formatValue(column, value) {
-  if (column === "releaseDate" && isMissing(value)) return "-";
-  if (isMissing(value)) return "—";
+  if (isMissing(value)) return "-";
   if (column === "contextWindow") return formatTokenCount(value);
   if (column === "parameterCount") return formatParameterCount(value);
   if (["inputPrice", "outputPrice", "blendedPrice"].includes(column)) {
@@ -1769,10 +1288,6 @@ function formatPrice(value) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 4,
   }).format(value);
-}
-
-function isMissing(value) {
-  return value === null || value === undefined || value === "";
 }
 
 function setLoading(isLoading) {

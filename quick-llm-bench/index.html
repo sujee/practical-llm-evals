@@ -7,8 +7,9 @@
       name="description"
       content="Measure endpoint responsiveness and token delivery speed across language models."
     />
-    <title>LLM Quick Bench — Streaming Performance</title>
+    <title>LLM Quick Bench - Streaming Performance</title>
     <link rel="stylesheet" href="styles.css" />
+    <script src="bench-utils.js" defer></script>
     <script src="raw-speed-test1.js" defer></script>
     <script src="thinking-test1.js" defer></script>
   </head>
@@ -289,11 +290,11 @@
             </table>
           </div>
           <div class="run-summary" aria-label="Total benchmark usage and cost">
-            <div><span>Run time</span><strong id="summary-time">—</strong></div>
-            <div><span>Input tokens</span><strong id="summary-input-tokens">—</strong></div>
-            <div><span>Output tokens</span><strong id="summary-output-tokens">—</strong></div>
-            <div><span>Total tokens</span><strong id="summary-total-tokens">—</strong></div>
-            <div><span>Estimated cost</span><strong id="summary-cost">—</strong></div>
+            <div><span>Run time</span><strong id="summary-time">-</strong></div>
+            <div><span>Input tokens</span><strong id="summary-input-tokens">-</strong></div>
+            <div><span>Output tokens</span><strong id="summary-output-tokens">-</strong></div>
+            <div><span>Total tokens</span><strong id="summary-total-tokens">-</strong></div>
+            <div><span>Estimated cost</span><strong id="summary-cost">-</strong></div>
           </div>
           <p id="usage-note" class="table-hint">Results will appear here after a raw speed benchmark run.</p>
         </div>
@@ -364,11 +365,11 @@
             </div>
             <div>
               <strong>Format compliance</strong>
-              <span>Share of runs ending in a parseable <code>Final answer: &lt;id&gt;|&lt;name&gt;</code> line.</span>
+              <span>Share of runs whose entire response is a parseable <code>&lt;id&gt;|&lt;name&gt;</code> line.</span>
             </div>
             <div>
               <strong>Cost per correct answer</strong>
-              <span>Total cost divided by the number of correct runs — the headline ranking for thinking models.</span>
+              <span>Total cost divided by the number of correct runs - the headline ranking for thinking models.</span>
             </div>
           </div>
         </section>
@@ -387,10 +388,10 @@
           <div class="field">
             <label for="thinking-format">Data format</label>
             <select id="thinking-format">
-              <option value="markdown">Markdown table</option>
+              <option value="markdown" selected>Markdown table</option>
               <option value="json">JSON</option>
               <option value="csv">CSV</option>
-              <option value="pipe" selected>Pipe delimited</option>
+              <option value="pipe">Pipe delimited</option>
             </select>
             <p class="hint">Markdown is the friendliest default.</p>
           </div>
@@ -406,12 +407,13 @@
           </div>
           <div class="field prompt-field">
             <label for="thinking-prompt-preview">Prompt template</label>
-            <textarea id="thinking-prompt-preview" rows="6" readonly>Each question builds a fresh table of {rows} rows, each with an id (integer), a unique name label such as user-1, and a numeric score. The model must find the row with the highest score and end with one line in the exact form:
+            <textarea id="thinking-prompt-preview" rows="7" readonly>Each question builds a fresh table of {rows} rows, each with an id (integer), a unique name label such as user-1, and a numeric score. The model must identify the row with the highest score.
 
-Final answer: &lt;id&gt;|&lt;name&gt;
+The entire response must be exactly one line:
+&lt;id&gt;|&lt;name&gt;
 
-The table is regenerated per question from a deterministic seed; the model never sees the same table twice within a run.</textarea>
-            <p class="hint">Preview only — the prompt itself is generated per question. A live sample appears under Testing methodology.</p>
+Output nothing else. Do not include reasoning, explanations, labels, markdown, or any text beyond the required answer.</textarea>
+            <p class="hint">Preview only - the prompt itself is generated per question. A live sample appears under Testing methodology.</p>
           </div>
           <fieldset class="benchmark-options">
             <legend>Request options</legend>
@@ -420,7 +422,7 @@ The table is regenerated per question from a deterministic seed; the model never
                 <input id="thinking-disable-thinking" type="checkbox" />
                 <span>Disable thinking</span>
               </label>
-              <p class="hint">Adds <code>chat_template_kwargs: { enable_thinking: false }</code>. Defaults off — this is a thinking test, so leave thinking on for the A/B compare.</p>
+              <p class="hint">Adds <code>chat_template_kwargs: { enable_thinking: false }</code>. Defaults off - this is a thinking test, so leave thinking on for the A/B compare.</p>
             </div>
             <div class="benchmark-toggle-control">
               <label for="thinking-require-server-tokens">
@@ -490,11 +492,11 @@ The table is regenerated per question from a deterministic seed; the model never
             </table>
           </div>
           <div class="run-summary" aria-label="Total thinking test usage and accuracy">
-            <div><span>Run time</span><strong id="summary-thinking-time">—</strong></div>
-            <div><span>Accuracy</span><strong id="summary-thinking-accuracy">—</strong></div>
-            <div><span>Total tokens</span><strong id="summary-thinking-total-tokens">—</strong></div>
-            <div><span>Estimated cost</span><strong id="summary-thinking-cost">—</strong></div>
-            <div><span>Cost / correct</span><strong id="summary-thinking-cost-per-correct">—</strong></div>
+            <div><span>Run time</span><strong id="summary-thinking-time">-</strong></div>
+            <div><span>Accuracy</span><strong id="summary-thinking-accuracy">-</strong></div>
+            <div><span>Total tokens</span><strong id="summary-thinking-total-tokens">-</strong></div>
+            <div><span>Estimated cost</span><strong id="summary-thinking-cost">-</strong></div>
+            <div><span>Cost / correct</span><strong id="summary-thinking-cost-per-correct">-</strong></div>
           </div>
           <p id="thinking-usage-note" class="table-hint">Results will appear here after a thinking benchmark run.</p>
         </div>
@@ -506,12 +508,12 @@ The table is regenerated per question from a deterministic seed; the model never
               <li><strong>Prompt</strong> is generated per question from a deterministic seed. Each question presents a fresh randomized table of <code>{rows}</code> rows with id, name, and score, then asks the model to return the id and name of the row with the highest score.</li>
               <li><strong>Scores are unique integers</strong> in a range larger than the row count, so there is always exactly one highest-scoring row with no ties to break.</li>
               <li><strong>Names are deterministic</strong> labels in the form <code>user-1</code>, <code>user-2</code>, and so on, so every row's name is unique within a question.</li>
-              <li><strong>Row order is shuffled</strong> with a per-question seed, so the highest-scoring row is uniformly distributed across positions — the model cannot shortcut by reading the first or last row.</li>
-              <li><strong>Grading</strong> requires the final non-empty line of the model's final content to exactly match <code>Final answer: &lt;id&gt;|&lt;name&gt;</code> (reasoning deltas are ignored). The id must use canonical positive-integer syntax and the name must match case-insensitively. Accuracy is correct runs / total measured runs.</li>
-              <li><strong>Format compliance</strong> is tracked separately — a run can be format-compliant (a parseable Final answer line) but incorrect, which separates "couldn't find the max" from "couldn't follow the format".</li>
-              <li><strong>Reasoning tokens</strong> are estimated from the <code>reasoning_content</code> / <code>reasoning</code> SSE deltas and shown alongside answer tokens (final content). The split is estimated — the server only provides the total.</li>
+              <li><strong>Row order is shuffled</strong> with a per-question seed, so the highest-scoring row is uniformly distributed across positions - the model cannot shortcut by reading the first or last row.</li>
+              <li><strong>Grading</strong> requires the model's entire final content to contain exactly one <code>&lt;id&gt;|&lt;name&gt;</code> line (reasoning deltas are ignored and surrounding whitespace is tolerated). The id must use canonical positive-integer syntax and the name must match case-insensitively. Accuracy is correct runs / total measured runs.</li>
+              <li><strong>Format compliance</strong> is tracked separately - a run can be format-compliant (a parseable <code>&lt;id&gt;|&lt;name&gt;</code> response) but incorrect, which separates "couldn't find the max" from "couldn't follow the format".</li>
+              <li><strong>Reasoning tokens</strong> are estimated from the <code>reasoning_content</code> / <code>reasoning</code> SSE deltas and shown alongside answer tokens (final content). The split is estimated - the server only provides the total.</li>
               <li><strong>TTFT</strong>, <strong>Tokens/sec</strong>, and <strong>End-to-end latency</strong> are measured the same way as Raw Speed Test 1 but on a per-question basis, so values reflect varying prompt sizes.</li>
-              <li><strong>Cost per correct answer</strong> = total cost ÷ correct runs. A model with high accuracy and low cost ranks first. Models with zero correct runs show "—".</li>
+              <li><strong>Cost per correct answer</strong> = total cost ÷ correct runs. A model with high accuracy and low cost ranks first. Models with zero correct runs show "-".</li>
               <li>One warm-up question runs per model. It is excluded from accuracy, latency, and token summaries but included in test time, token usage, and cost.</li>
               <li>Total run time is wall-clock time; parallel model times are not summed.</li>
               <li class="methodology-request-item">

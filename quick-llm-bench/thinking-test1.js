@@ -1,19 +1,15 @@
-// Thinking Test 1 — data-processing benchmark.
+// Thinking Test 1 - data-processing benchmark.
 // Each question generates a fresh randomized table of {id, name, score} rows
 // and asks the model to return the id and name of the row with the highest score.
-// Grading requires the final non-empty line to exactly match
-// "Final answer: <id>|<name>" and compares it (integer id, case-insensitive name) to the
+// Grading requires the entire response to be one line that exactly matches
+// "<id>|<name>" and compares it (integer id, case-insensitive name) to the
 // pre-computed answer. The prompt is regenerated per question from a deterministic
 // seed, so the model never sees the same table twice within a run.
 //
-// Shares the global lexical scope with raw-speed-test1.js (classic <script>
-// loaded with `defer`), so it reuses helpers like buildApiHeaders,
-// buildChatCompletionsUrl, clampInteger, formatMilliseconds, formatRate,
-// formatDuration, formatInteger, formatCost, isMissing, compareValues,
-// shuffleWithSeed, runWithConcurrency, summarizeRuns, summarizeBenchmarkUsage,
-// summarizeRunUsage, percentile, estimateTokenCount, estimatePromptTokenCount,
-// downloadFile, fileTimestamp, toCsvRow, formatBenchmarkRequest, and the
-// HttpError class — all declared at module scope in raw-speed-test1.js.
+// Shares the global lexical scope with bench-utils.js and raw-speed-test1.js (classic
+// <script> loaded with `defer`, in that order). Endpoint, streaming, scheduling,
+// summary, column-management, formatting, and export helpers live in bench-utils.js.
+// raw-speed-test1.js owns the model loader and shared selection/connection state.
 
 const MAX_THINKING_ROWS = 200;
 
@@ -94,7 +90,8 @@ thinkingSortHeaders.forEach((header) => {
 initializeThinkingColumnPicker();
 resetThinkingResults();
 showAllThinkingColumnsButton.addEventListener("click", () => {
-  visibleThinkingColumns = new Set(thinkingColumnKeys);
+  visibleThinkingColumns.clear();
+  thinkingColumnKeys.forEach((key) => visibleThinkingColumns.add(key));
   saveVisibleThinkingColumns();
   syncThinkingColumnPicker();
   renderThinkingResults();
@@ -135,40 +132,20 @@ thinkingForm.addEventListener("submit", async (event) => {
   thinkingAbortController = new AbortController();
   thinkingStartedAtMs = performance.now();
   const runSeed = crypto.getRandomValues(new Uint32Array(1))[0];
-  thinkingRun = {
-    status: "running",
-    startedAt: new Date().toISOString(),
-    provider: connection.provider,
-    endpoint: buildChatCompletionsUrl(endpointInput.value),
-    environment: {
-      userAgent: navigator.userAgent,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    },
+  thinkingRun = createBenchmarkRun({
+    selectedModels,
+    connection,
+    config,
+    runSeed,
     methodology: {
       temperature: 0,
       topP: 1,
       operation: "highest score",
       prompt: "regenerated per question from seeded random rows of {id, name, score}",
-      grading: "require final non-empty line to exactly match 'Final answer: <id>|<name>'; correct if integer id and case-insensitive name match expected",
+      grading: "require the entire response to be exactly one '<id>|<name>' line; correct if integer id and case-insensitive name match expected",
       percentile: "nearest rank",
     },
-    config,
-    sampleExchange: null,
-    runSeed,
-    executionOrder: null,
-    results: selectedModels.map((model) => ({
-      modelId: model.modelId,
-      pricing: {
-        inputPerMillionTokens: model.inputPrice,
-        outputPerMillionTokens: model.outputPrice,
-      },
-      status: "queued",
-      warmup: null,
-      runs: [],
-      errors: [],
-      totalTestTimeMs: null,
-    })),
-  };
+  });
   exportThinkingCsvButton.disabled = false;
   exportThinkingJsonButton.disabled = false;
   const scheduledResults = shuffleWithSeed([...thinkingRun.results], runSeed);
@@ -240,329 +217,123 @@ function setThinkingStatus(message, isError = false) {
 }
 
 async function benchmarkThinkingModel(result, config, signal, connection, runSeed) {
-  if (signal.aborted) {
-    result.status = "cancelled";
-    renderThinkingResults();
-    return;
-  }
-  const modelStartedAt = performance.now();
-  result.startedAtMs = modelStartedAt;
-  result.startedAt = new Date().toISOString();
-  result.status = "warming";
-  renderThinkingResults();
-
-  let includeUsage = true;
-  try {
-    try {
-      result.warmup = await runThinkingCompletion(
-        result.modelId,
-        generateThinkingTask(runSeed, -1, config),
-        config,
-        signal,
-        true,
-        "warmup",
-        connection,
-      );
-    } catch (error) {
-      if (!(error instanceof HttpError) || error.status !== 400) throw error;
-      includeUsage = false;
-      result.warmup = await runThinkingCompletion(
-        result.modelId,
-        generateThinkingTask(runSeed, -1, config),
-        config,
-        signal,
-        false,
-        "warmup-fallback",
-        connection,
-      );
-    }
-
-    for (let runIndex = 0; runIndex < config.runs; runIndex += 1) {
-      if (signal.aborted) break;
-      result.status = `run ${runIndex + 1}/${config.runs}`;
-      renderThinkingResults();
-      try {
-        const measuredRun = await runThinkingCompletion(
-          result.modelId,
-          generateThinkingTask(runSeed, runIndex, config),
-          config,
-          signal,
-          includeUsage,
-          `run-${runIndex + 1}`,
-          connection,
-        );
-        result.runs.push({ index: runIndex + 1, ...measuredRun });
-      } catch (error) {
-        if (signal.aborted) break;
-        result.errors.push({ run: runIndex + 1, message: error.message });
-      }
-      renderThinkingResults();
-    }
-
-    result.status = signal.aborted
-      ? "cancelled"
-      : result.runs.length > 0
-        ? result.errors.length > 0 ? "partial" : "complete"
-        : "error";
-  } catch (error) {
-    result.status = signal.aborted ? "cancelled" : "error";
-    if (!signal.aborted) result.errors.push({ run: "warmup", message: error.message });
-  }
-  result.finishedAt = new Date().toISOString();
-  result.totalTestTimeMs = performance.now() - modelStartedAt;
-  renderThinkingResults();
+  await runBenchmarkSequence(
+    result,
+    config,
+    signal,
+    ({ runIndex, label, includeUsage }) => runThinkingCompletion(
+      result.modelId,
+      generateThinkingTask(runSeed, runIndex, config),
+      config,
+      signal,
+      includeUsage,
+      label,
+      connection,
+    ),
+    renderThinkingResults,
+  );
 }
 
 async function runThinkingCompletion(modelId, task, config, outerSignal, includeUsage, runLabel, connection) {
-  const requestController = new AbortController();
-  const abortFromOuter = () => requestController.abort(outerSignal.reason);
-  outerSignal.addEventListener("abort", abortFromOuter, { once: true });
-  const timeoutId = setTimeout(
-    () => requestController.abort(new DOMException("Request timed out", "TimeoutError")),
-    config.timeoutMs,
-  );
-  const startedAt = performance.now();
+  const stream = await runStreamingChatCompletion({
+    modelId,
+    config,
+    outerSignal,
+    runLabel,
+    connection,
+    body: buildThinkingRequestBody(modelId, config, task.prompt, includeUsage),
+    logName: "Thinking Test 1",
+  });
+  const extracted = extractThinkingAnswer(stream.contentText);
+  const correct = gradeThinkingAnswer(extracted, task.expected);
+  // The server only reports the total completion-token count; split it
+  // proportionally between reasoning and answer characters as an estimate.
+  const reasoningTokens = stream.measurement.completionTokens > 0 && stream.outputText.length > 0
+    ? Math.round(
+      (stream.reasoningText.length / stream.outputText.length)
+      * stream.measurement.completionTokens,
+    )
+    : 0;
+  const answerTokens = stream.measurement.completionTokens - reasoningTokens;
 
-  try {
-    const body = buildThinkingRequestBody(modelId, config, task.prompt, includeUsage);
-    const requestUrl = buildChatCompletionsUrl(connection.endpoint);
-    const rawRequestText = formatBenchmarkRequest(requestUrl, body);
-    logThinkingRaw(config, `${modelId} · ${runLabel} · RAW REQUEST`, rawRequestText);
-
-    const response = await fetch(requestUrl, {
-      method: "POST",
-      headers: buildApiHeaders(connection.apiKey, {
-        accept: "text/event-stream",
-        contentType: "application/json",
-      }),
-      body: JSON.stringify(body),
-      signal: requestController.signal,
-    });
-
-    const responseHeaderLines = [`HTTP ${response.status} ${response.statusText}`.trim()];
-    response.headers.forEach((value, key) => responseHeaderLines.push(`${key}: ${value}`));
-    logThinkingRaw(
-      config,
-      `${modelId} · ${runLabel} · RAW RESPONSE HEADERS`,
-      responseHeaderLines.join("\n"),
-    );
-
-    if (!response.ok) {
-      const rawErrorBody = await response.text();
-      logThinkingRaw(config, `${modelId} · ${runLabel} · RAW RESPONSE BODY`, rawErrorBody);
-      let payload;
-      try {
-        payload = rawErrorBody ? JSON.parse(rawErrorBody) : {};
-      } catch {
-        payload = { message: rawErrorBody };
-      }
-      const message = payload?.error?.message || payload?.message || response.statusText;
-      throw new HttpError(response.status, `${response.status} ${message}`.trim());
-    }
-    if (!response.body) throw new Error("The endpoint returned no streaming response body.");
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let firstTokenAt = null;
-    let outputText = "";
-    let reasoningText = "";
-    let contentText = "";
-    let rawChunkNumber = 0;
-    const rawResponseChunks = [];
-    let promptTokens = null;
-    let completionTokens = null;
-    let finishReason = null;
-
-    const consumeLine = (line) => {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("data:")) return;
-      const data = trimmed.slice(5).trim();
-      if (!data || data === "[DONE]") return;
-      let chunk;
-      try {
-        chunk = JSON.parse(data);
-      } catch {
-        return;
-      }
-      if (Number.isFinite(chunk.usage?.completion_tokens)) {
-        completionTokens = chunk.usage.completion_tokens;
-      }
-      if (Number.isFinite(chunk.usage?.prompt_tokens)) {
-        promptTokens = chunk.usage.prompt_tokens;
-      }
-      if (chunk.choices?.[0]?.finish_reason) {
-        finishReason = chunk.choices[0].finish_reason;
-      }
-      const delta = chunk.choices?.[0]?.delta;
-      const contentDelta = typeof delta?.content === "string" ? delta.content : "";
-      const reasoningDelta = typeof delta?.reasoning_content === "string"
-        ? delta.reasoning_content
-        : typeof delta?.reasoning === "string" ? delta.reasoning : "";
-      if (contentDelta || reasoningDelta) {
-        if (firstTokenAt === null) firstTokenAt = performance.now();
-        contentText += contentDelta;
-        reasoningText += reasoningDelta;
-        outputText += reasoningDelta + contentDelta;
-      }
-    };
-
-    while (true) {
-      const { value, done } = await reader.read();
-      const rawResponseChunk = decoder.decode(value || new Uint8Array(), { stream: !done });
-      if (rawResponseChunk) {
-        rawChunkNumber += 1;
-        rawResponseChunks.push(rawResponseChunk);
-        logThinkingRaw(
-          config,
-          `${modelId} · ${runLabel} · RAW RESPONSE CHUNK #${rawChunkNumber}`,
-          rawResponseChunk,
-        );
-      }
-      buffer += rawResponseChunk;
-      const lines = buffer.split(/\r?\n/);
-      buffer = lines.pop() || "";
-      lines.forEach(consumeLine);
-      if (done) break;
-    }
-    if (buffer) consumeLine(buffer);
-
-    const assembledSections = [];
-    if (reasoningText) assembledSections.push(`--- REASONING ---\n${reasoningText}`);
-    if (contentText) assembledSections.push(`--- FINAL CONTENT ---\n${contentText}`);
-    const consolidatedOutput = assembledSections.join("\n\n") || "[No generated text]";
-    logThinkingRaw(
-      config,
-      `${modelId} · ${runLabel} · ASSEMBLED RESPONSE`,
-      consolidatedOutput,
-    );
-
-    const finishedAt = performance.now();
-    if (firstTokenAt === null) throw new Error("The stream completed without generated text.");
-    const completionTokenCountEstimated = completionTokens === null;
-    const promptTokenCountEstimated = promptTokens === null;
-    if (config.requireServerTokenCounts && (completionTokenCountEstimated || promptTokenCountEstimated)) {
-      throw new Error("The endpoint omitted prompt or completion token usage required by this benchmark.");
-    }
-    if (completionTokenCountEstimated) completionTokens = estimateTokenCount(outputText);
-    if (promptTokenCountEstimated) promptTokens = estimatePromptTokenCount(body.messages);
-    const generationSeconds = Math.max((finishedAt - firstTokenAt) / 1000, 0.001);
-
-    const extracted = extractThinkingAnswer(contentText);
-    const correct = gradeThinkingAnswer(extracted, task.expected);
-    // The server only reports the total completion-token count; split it
-    // proportionally between reasoning and answer characters as an estimate.
-    const reasoningTokens = completionTokens > 0 && outputText.length > 0
-      ? Math.round((reasoningText.length / outputText.length) * completionTokens)
-      : 0;
-    const answerTokens = completionTokens - reasoningTokens;
-
-    if (!correct || !extracted.ok) {
-      const expectedAnswer = `${task.expected.id}|${task.expected.name}`;
-      const parsedAnswer = extracted.ok ? `${extracted.id}|${extracted.name}` : null;
-      const analysis = [];
-      if (!extracted.ok) {
-        analysis.push("Format: BROKEN — could not extract a valid `Final answer: <id>|<name>` line.");
-        analysis.push(`Expected: ${expectedAnswer}`);
-        if (extracted.raw === null) {
-          analysis.push("Reason: no `Final answer:` line appeared in the model response.");
-        } else {
-          analysis.push(`Last \`Final answer:\` tail: "${extracted.raw}"`);
-          const parts = extracted.raw.split("|").map((p) => p.trim());
-          if (parts.length !== 2) {
-            analysis.push(`Reason: expected exactly one "|" separator (got ${parts.length} parts).`);
-          } else if (!Number.isInteger(Number(parts[0]))) {
-            analysis.push(`Reason: id portion "${parts[0]}" is not an integer.`);
-          }
-        }
+  if (!correct || !extracted.ok) {
+    const expectedAnswer = `${task.expected.id}|${task.expected.name}`;
+    const parsedAnswer = extracted.ok ? `${extracted.id}|${extracted.name}` : null;
+    const analysis = [];
+    if (!extracted.ok) {
+      analysis.push("Format: BROKEN - the entire response was not exactly one `<id>|<name>` line.");
+      analysis.push(`Expected: ${expectedAnswer}`);
+      if (extracted.raw === null) {
+        analysis.push("Reason: the model response was empty.");
       } else {
-        analysis.push(`Format: OK — parsed "${parsedAnswer}"`);
-        analysis.push(`Expected:    ${expectedAnswer}`);
-        if (extracted.id !== task.expected.id) {
-          analysis.push(`Mismatch: id ${extracted.id} != expected ${task.expected.id}`);
-        }
-        if (extracted.name.toLowerCase() !== task.expected.name.toLowerCase()) {
-          analysis.push(`Mismatch: name "${extracted.name}" != expected "${task.expected.name}"`);
+        analysis.push(`Response: "${extracted.raw}"`);
+        const parts = extracted.raw.split("|").map((p) => p.trim());
+        if (parts.length !== 2) {
+          analysis.push(`Reason: expected exactly one "|" separator (got ${parts.length} parts).`);
+        } else if (!Number.isInteger(Number(parts[0]))) {
+          analysis.push(`Reason: id portion "${parts[0]}" is not an integer.`);
         }
       }
-      if (reasoningText) analysis.push(`Reasoning: ${reasoningText.length} chars (omitted from response above).`);
-      analysis.push(`Content: ${contentText.length} chars.`);
-      console.log(
-        `[Thinking Test 1] FAILURE · ${modelId} · ${runLabel}\n` +
-        `--- MODEL RESPONSE ---\n${contentText}\n` +
-        `--- ANALYSIS ---\n${analysis.join("\n")}`,
-      );
+    } else {
+      analysis.push(`Format: OK - parsed "${parsedAnswer}"`);
+      analysis.push(`Expected:    ${expectedAnswer}`);
+      if (extracted.id !== task.expected.id) {
+        analysis.push(`Mismatch: id ${extracted.id} != expected ${task.expected.id}`);
+      }
+      if (extracted.name.toLowerCase() !== task.expected.name.toLowerCase()) {
+        analysis.push(`Mismatch: name "${extracted.name}" != expected "${task.expected.name}"`);
+      }
     }
-
-    const measurement = {
-      ttftMs: firstTokenAt - startedAt,
-      endToEndLatencyMs: finishedAt - startedAt,
-      tokensPerSecond: completionTokens / generationSeconds,
-      promptTokens,
-      completionTokens,
-      totalTokens: promptTokens + completionTokens,
-      tokenCountEstimated: completionTokenCountEstimated || promptTokenCountEstimated,
-      promptTokenCountEstimated,
-      completionTokenCountEstimated,
-      outputCharacters: outputText.length,
-      reasoningCharacters: reasoningText.length,
-      contentCharacters: contentText.length,
-      responseChunks: rawChunkNumber,
-      finishReason,
-      reasoningTokens,
-      answerTokens,
-      correct,
-      formatCompliant: extracted.ok,
-      parsedAnswer: extracted.ok ? `${extracted.id}|${extracted.name}` : null,
-      expectedAnswer: `${task.expected.id}|${task.expected.name}`,
-    };
-
-    if (runLabel.startsWith("run-") && thinkingRun && !thinkingRun.sampleExchange) {
-      const gradingBlock = [
-        "--- GRADING ---",
-        `Expected: ${measurement.expectedAnswer}`,
-        `Parsed:  ${measurement.parsedAnswer ?? "(no Final answer line found)"}`,
-        `Correct:  ${measurement.correct}`,
-      ].join("\n");
-      thinkingRun.sampleExchange = {
-        modelId,
-        runLabel,
-        capturedAt: new Date().toISOString(),
-        task: {
-          rowCount: task.rows.length,
-          dataFormat: task.dataFormat,
-          expectedAnswer: measurement.expectedAnswer,
-          parsedAnswer: measurement.parsedAnswer,
-          correct: measurement.correct,
-        },
-        request: rawRequestText,
-        response: [
-          responseHeaderLines.join("\n"),
-          "",
-          ...rawResponseChunks.flatMap((chunk, index) => [`[chunk ${index + 1}]`, chunk]),
-        ].join("\n"),
-        consolidatedOutput: `${consolidatedOutput}\n\n${gradingBlock}`,
-      };
-      renderThinkingMethodologySample();
-    }
-
-    logThinkingEvent(config, "completion summary", { model: modelId, run: runLabel, measurement });
-    return measurement;
-  } catch (error) {
-    logThinkingEvent(config, "request error", {
-      model: modelId,
-      run: runLabel,
-      name: error.name,
-      message: error.message,
-    });
-    if (requestController.signal.aborted && !outerSignal.aborted) {
-      throw new Error(`Timed out after ${Math.round(config.timeoutMs / 1000)} seconds.`);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
-    outerSignal.removeEventListener("abort", abortFromOuter);
+    if (stream.reasoningText) analysis.push(`Reasoning: ${stream.reasoningText.length} chars (omitted from response above).`);
+    analysis.push(`Content: ${stream.contentText.length} chars.`);
+    console.log(
+      `[Thinking Test 1] FAILURE · ${modelId} · ${runLabel}\n` +
+      `--- MODEL RESPONSE ---\n${stream.contentText}\n` +
+      `--- ANALYSIS ---\n${analysis.join("\n")}`,
+    );
   }
+
+  const measurement = {
+    ...stream.measurement,
+    reasoningTokens,
+    answerTokens,
+    correct,
+    formatCompliant: extracted.ok,
+    parsedAnswer: extracted.ok ? `${extracted.id}|${extracted.name}` : null,
+    expectedAnswer: `${task.expected.id}|${task.expected.name}`,
+  };
+
+  if (runLabel.startsWith("run-") && thinkingRun && !thinkingRun.sampleExchange) {
+    const gradingBlock = [
+      "--- GRADING ---",
+      `Expected: ${measurement.expectedAnswer}`,
+      `Parsed:  ${measurement.parsedAnswer ?? "(response did not match <id>|<name>)"}`,
+      `Correct:  ${measurement.correct}`,
+    ].join("\n");
+    thinkingRun.sampleExchange = {
+      modelId,
+      runLabel,
+      capturedAt: new Date().toISOString(),
+      task: {
+        rowCount: task.rows.length,
+        dataFormat: task.dataFormat,
+        expectedAnswer: measurement.expectedAnswer,
+        parsedAnswer: measurement.parsedAnswer,
+        correct: measurement.correct,
+      },
+      request: stream.request,
+      response: stream.response,
+      consolidatedOutput: `${stream.consolidatedOutput}\n\n${gradingBlock}`,
+    };
+    renderThinkingMethodologySample();
+  }
+
+  logBenchmarkEvent(config, "Thinking Test 1", "completion summary", {
+    model: modelId,
+    run: runLabel,
+    measurement,
+  });
+  return measurement;
 }
 
 function buildThinkingRequestBody(modelId, config, prompt, includeUsage = true) {
@@ -578,22 +349,6 @@ function buildThinkingRequestBody(modelId, config, prompt, includeUsage = true) 
   if (includeUsage) body.stream_options = { include_usage: true };
   if (config.disableThinking) body.chat_template_kwargs = { enable_thinking: false };
   return body;
-}
-
-function logThinkingEvent(config, event, details) {
-  if (!config.logToConsole) return;
-  let serialized;
-  try {
-    serialized = JSON.stringify(details, null, 2);
-  } catch {
-    serialized = String(details);
-  }
-  console.log(`[Thinking Test 1] ${event}\n${serialized}`);
-}
-
-function logThinkingRaw(config, label, rawData) {
-  if (!config.logToConsole) return;
-  console.log(`[Thinking Test 1] ${label}\n${rawData}`);
 }
 
 function generateThinkingTask(runSeed, runIndex, config) {
@@ -649,13 +404,13 @@ function renderThinkingPrompt(rows, format) {
     "",
     table,
     "",
-    "Find the single row that has the HIGHEST score.",
-    "Briefly check the scores to confirm your choice, then end your response with one line in exactly this format:",
+    "Identify the single row that has the HIGHEST score.",
     "",
-    "Final answer: <id>|<name>",
+    "Your entire response must be exactly one line:",
+    "<id>|<name>",
     "",
-    "Replace <id> with the row's id (an integer) and <name> with the row's exact name.",
-    "Place nothing else on that final line, and do not wrap the answer in quotes or markdown.",
+    "Replace <id> and <name> with the selected row's values.",
+    "Output nothing else. Do not include reasoning, explanations, labels, markdown, or any text beyond the required answer.",
   ].join("\n");
 }
 
@@ -685,14 +440,11 @@ function serializeThinkingRows(rows, format) {
 
 function extractThinkingAnswer(contentText) {
   if (!contentText) return { ok: false, raw: null };
-  const lines = contentText.split(/\r?\n/);
-  while (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
-  const answerLines = lines.filter((line) => line.startsWith("Final answer:"));
-  if (answerLines.length === 0) return { ok: false, raw: null };
-  const lastAnswerLine = answerLines[answerLines.length - 1];
-  const raw = lastAnswerLine.slice("Final answer:".length).trim();
-  const finalLine = lines[lines.length - 1];
-  const match = finalLine.match(/^Final answer: ([1-9]\d*)\|([A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*)$/);
+  // The prompt requires the entire response to contain only the answer. Trim
+  // surrounding whitespace for transport/model cosmetics, but reject any
+  // explanation, label, markdown, or additional non-empty line.
+  const raw = contentText.trim();
+  const match = raw.match(/^([1-9]\d*)\|([A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*)$/);
   if (!match) return { ok: false, raw };
   const id = Number(match[1]);
   const name = match[2];
@@ -723,7 +475,7 @@ function renderThinkingResults() {
   thinkingSummaryAccuracy.textContent = formatRatioPercent(overallAccuracy);
   thinkingSummaryTotalTokens.textContent = formatInteger(runUsage.totalTokens);
   thinkingSummaryCost.textContent = runUsage.requestCount === 0
-    ? "—"
+    ? "-"
     : runUsage.pricedUsageCount === 0
       ? "Unpriced"
       : `${formatCost(runUsage.cost)}${runUsage.hasUnpriced ? " + unpriced" : ""}`;
@@ -732,18 +484,11 @@ function renderThinkingResults() {
     : "Warm-up and measured questions are included.";
   const totalCost = runUsage.pricedUsageCount > 0 ? runUsage.cost : null;
   thinkingSummaryCostPerCorrect.textContent = totalCost === null || runAccuracy.correct === 0
-    ? "—"
+    ? "-"
     : formatCost(totalCost / runAccuracy.correct);
 
   updateThinkingSortHeaders();
-  const sortedResults = [...thinkingRun.results].sort((left, right) => {
-    const leftValue = getThinkingSortValue(left, thinkingSortState.key);
-    const rightValue = getThinkingSortValue(right, thinkingSortState.key);
-    if (isMissing(leftValue)) return isMissing(rightValue) ? 0 : 1;
-    if (isMissing(rightValue)) return -1;
-    const comparison = compareValues(leftValue, rightValue);
-    return thinkingSortState.direction === "ascending" ? comparison : -comparison;
-  });
+  const sortedResults = getSortedThinkingResults();
 
   sortedResults.forEach((result) => {
     const summary = summarizeRuns(result.runs);
@@ -773,9 +518,9 @@ function renderThinkingResults() {
       ),
       costPerCorrect: formatCost(costPerCorrect),
       totalTokens: usage.requestCount === 0
-        ? "—"
+        ? "-"
         : `${formatInteger(usage.totalTokens)} (${formatInteger(usage.promptTokens)} in / ${formatInteger(usage.completionTokens)} out)${usage.hasEstimated ? " *" : ""}`,
-      cost: usage.requestCount === 0 ? "—" : usage.cost === null ? "Unpriced" : formatCost(usage.cost),
+      cost: usage.requestCount === 0 ? "-" : usage.cost === null ? "Unpriced" : formatCost(usage.cost),
       totalTestTimeMs: formatDuration(result.totalTestTimeMs ?? getThinkingElapsedMs(result)),
     };
     const statusClass = result.status === "complete"
@@ -783,7 +528,7 @@ function renderThinkingResults() {
       : result.status === "partial" ? "partial"
       : result.status === "error" ? "error"
       : result.status === "queued" ? "" : "running";
-    const statusTitle = result.errors.map((error) => `${error.run}: ${error.message}`).join("\n");
+    const statusTitle = result.errors.length > 0 ? "Check console for errors." : "";
 
     const row = document.createElement("tr");
     thinkingColumnKeys.forEach((key) => {
@@ -791,10 +536,10 @@ function renderThinkingResults() {
       cell.hidden = !visibleThinkingColumns.has(key);
       cell.classList.toggle("sorted-column", thinkingSortState.key === key);
       if (key === "status") {
+        if (statusTitle) cell.title = statusTitle;
         const pill = document.createElement("span");
         pill.className = `status-pill ${statusClass}`.trim();
         pill.textContent = values.status;
-        if (statusTitle) pill.title = statusTitle;
         cell.append(pill);
       } else if (key === "accuracy") {
         cell.textContent = formatRatioPercent(accuracy.accuracy, 1, accuracy.correct, accuracy.total);
@@ -813,7 +558,7 @@ function renderThinkingResults() {
   const notes = [
     "Accuracy and format % include only successful measured runs; the warm-up question is excluded.",
     "Reasoning and answer token splits are estimated from character proportions; the server reports only the total.",
-    "Cost per correct answer is total cost divided by correct runs; models with zero correct runs show \u2014.",
+    "Cost per correct answer is total cost divided by correct runs; models with zero correct runs show -.",
     "Percentiles use nearest-rank selection across successful measured runs.",
   ];
   if (hasEstimates) notes.push("* Some token counts are estimated because the endpoint omitted streaming usage; compare their costs cautiously.");
@@ -824,12 +569,12 @@ function renderThinkingResults() {
 function resetThinkingResults() {
   thinkingRun = null;
   thinkingBody.replaceChildren();
-  thinkingSummaryTime.textContent = "—";
-  thinkingSummaryAccuracy.textContent = "—";
-  thinkingSummaryTotalTokens.textContent = "—";
-  thinkingSummaryCost.textContent = "—";
+  thinkingSummaryTime.textContent = "-";
+  thinkingSummaryAccuracy.textContent = "-";
+  thinkingSummaryTotalTokens.textContent = "-";
+  thinkingSummaryCost.textContent = "-";
   thinkingSummaryCost.removeAttribute("title");
-  thinkingSummaryCostPerCorrect.textContent = "—";
+  thinkingSummaryCostPerCorrect.textContent = "-";
   thinkingUsageNote.textContent = "Results will appear here after a thinking benchmark run.";
   exportThinkingCsvButton.disabled = true;
   exportThinkingJsonButton.disabled = true;
@@ -838,86 +583,47 @@ function resetThinkingResults() {
 }
 
 function sortThinkingBy(key) {
-  thinkingSortState = {
-    key,
-    direction: thinkingSortState.key === key && thinkingSortState.direction === "ascending"
-      ? "descending"
-      : "ascending",
-  };
+  thinkingSortState = nextSortState(thinkingSortState, key);
   renderThinkingResults();
 }
 
 function updateThinkingSortHeaders() {
-  thinkingSortHeaders.forEach((header) => {
-    header.hidden = !visibleThinkingColumns.has(header.dataset.thinkingColumn);
-    const isActive = header.dataset.thinkingColumn === thinkingSortState.key;
-    header.classList.toggle("sorted-column", isActive);
-    header.setAttribute("aria-sort", isActive ? thinkingSortState.direction : "none");
-    header.querySelector(".sort-icon").textContent = isActive
-      ? thinkingSortState.direction === "ascending" ? "↑" : "↓"
-      : "↕";
+  updateSortHeaders({
+    headers: thinkingSortHeaders,
+    columnAttr: "thinkingColumn",
+    visibleColumns: visibleThinkingColumns,
+    sortState: thinkingSortState,
   });
 }
 
 function initializeThinkingColumnPicker() {
-  thinkingSortHeaders.forEach((header) => {
-    const key = header.dataset.thinkingColumn;
-    const label = document.createElement("label");
-    label.className = "column-option";
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.value = key;
-    checkbox.checked = visibleThinkingColumns.has(key);
-    const text = document.createElement("span");
-    text.textContent = header.querySelector("button span").textContent;
-    checkbox.addEventListener("change", () => {
-      if (checkbox.checked) {
-        visibleThinkingColumns.add(key);
-      } else if (visibleThinkingColumns.size === 1) {
-        checkbox.checked = true;
-        return;
-      } else {
-        visibleThinkingColumns.delete(key);
-      }
-      if (!visibleThinkingColumns.has(thinkingSortState.key)) {
-        thinkingSortState = { key: [...visibleThinkingColumns][0], direction: "ascending" };
-      }
-      saveVisibleThinkingColumns();
-      renderThinkingResults();
-    });
-    label.append(checkbox, text);
-    thinkingColumnOptions.append(label);
+  buildColumnPicker({
+    headers: thinkingSortHeaders,
+    columnAttr: "thinkingColumn",
+    container: thinkingColumnOptions,
+    visibleColumns: visibleThinkingColumns,
+    onChange: onThinkingColumnVisibilityChange,
   });
+}
+
+function onThinkingColumnVisibilityChange(visibleColumns) {
+  if (!visibleColumns.has(thinkingSortState.key)) {
+    thinkingSortState = { key: [...visibleColumns][0], direction: "ascending" };
+  }
+  saveVisibleThinkingColumns();
+  renderThinkingResults();
 }
 
 function syncThinkingColumnPicker() {
-  thinkingColumnOptions.querySelectorAll("input").forEach((checkbox) => {
-    checkbox.checked = visibleThinkingColumns.has(checkbox.value);
-  });
+  syncColumnPicker(thinkingColumnOptions, visibleThinkingColumns);
 }
 
 function loadVisibleThinkingColumns() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(thinkingColumnPreferenceKey));
-    if (Array.isArray(saved)) {
-      const validColumns = saved.filter((key) => thinkingColumnKeys.includes(key));
-      if (validColumns.length > 0) return new Set(validColumns);
-    }
-  } catch {
-    // Storage may be unavailable in strict privacy contexts; use defaults.
-  }
-  return new Set(defaultThinkingColumns);
+  return loadVisibleColumnSet(thinkingColumnPreferenceKey, thinkingColumnKeys, defaultThinkingColumns);
 }
 
 function saveVisibleThinkingColumns() {
-  try {
-    localStorage.setItem(
-      thinkingColumnPreferenceKey,
-      JSON.stringify([...visibleThinkingColumns]),
-    );
-  } catch {
-    // Column selection still works for this session when storage is unavailable.
-  }
+  saveVisibleColumnSet(thinkingColumnPreferenceKey, visibleThinkingColumns);
 }
 
 function getThinkingSortValue(result, key) {
@@ -982,11 +688,11 @@ function summarizeRunThinkingAccuracy(results) {
 
 function formatRatioPercent(ratio, scale = 1, numerator = null, denominator = null) {
   if (denominator !== null) {
-    if (denominator === 0) return "—";
+    if (denominator === 0) return "-";
     const pct = Math.round((numerator / denominator) * 100);
     return `${pct}% (${numerator}/${denominator})`;
   }
-  if (ratio === null || ratio === undefined) return "—";
+  if (ratio === null || ratio === undefined) return "-";
   const pct = Math.round(ratio * 100 * scale);
   return `${pct}%`;
 }
@@ -999,11 +705,7 @@ function getAccuracyHighlightClass(accuracy) {
 }
 
 function getThinkingElapsedMs(result) {
-  if (!result.startedAtMs) return null;
-  if (result.status === "queued" || result.status === "warming" || /^run \d+\/\d+$/i.test(result.status)) {
-    return performance.now() - result.startedAtMs;
-  }
-  return null;
+  return getLiveElapsedMs(result);
 }
 
 function startThinkingClock() {
@@ -1055,62 +757,42 @@ function renderThinkingMethodologySample() {
 
 function exportThinkingCsv() {
   if (!thinkingRun) return;
-  const exportColumns = getVisibleThinkingExportColumns();
-  const header = exportColumns.map((column) => column.label);
-  const rows = getSortedThinkingResults().map((result) => (
-    exportColumns.map((column) => getThinkingSortValue(result, column.key))
-  ));
-  rows.push(exportColumns.map((column) => getThinkingTotalValue(column.key)));
-  downloadFile(
-    `llm-thinking-test-${fileTimestamp()}.csv`,
-    [header, ...rows].map(toCsvRow).join("\n"),
-    "text/csv",
-  );
+  exportBenchmarkCsvFile({
+    filenamePrefix: "llm-thinking-test",
+    columns: getVisibleThinkingExportColumns(),
+    results: getSortedThinkingResults(),
+    getValue: getThinkingSortValue,
+    getTotal: getThinkingTotalValue,
+  });
 }
 
 function exportThinkingJson() {
   if (!thinkingRun) return;
-  const exportColumns = getVisibleThinkingExportColumns();
-  const toSelectedObject = (result) => Object.fromEntries(
-    exportColumns.map((column) => [column.key, getThinkingSortValue(result, column.key)]),
-  );
-  const payload = {
-    exportedAt: new Date().toISOString(),
-    selectedColumns: exportColumns.map((column) => column.key),
-    config: thinkingRun.config,
-    methodology: thinkingRun.methodology,
-    runSeed: thinkingRun.runSeed,
-    executionOrder: thinkingRun.executionOrder,
-    results: getSortedThinkingResults().map(toSelectedObject),
-    total: Object.fromEntries(
-      exportColumns.map((column) => [column.key, getThinkingTotalValue(column.key)]),
-    ),
-  };
-  downloadFile(
-    `llm-thinking-test-${fileTimestamp()}.json`,
-    JSON.stringify(payload, null, 2),
-    "application/json",
-  );
+  exportBenchmarkJsonFile({
+    filenamePrefix: "llm-thinking-test",
+    columns: getVisibleThinkingExportColumns(),
+    results: getSortedThinkingResults(),
+    getValue: getThinkingSortValue,
+    getTotal: getThinkingTotalValue,
+    metadata: {
+      config: thinkingRun.config,
+      methodology: thinkingRun.methodology,
+      runSeed: thinkingRun.runSeed,
+      executionOrder: thinkingRun.executionOrder,
+    },
+  });
 }
 
 function getVisibleThinkingExportColumns() {
-  return thinkingSortHeaders
-    .filter((header) => visibleThinkingColumns.has(header.dataset.thinkingColumn))
-    .map((header) => ({
-      key: header.dataset.thinkingColumn,
-      label: header.querySelector("button span").textContent,
-    }));
+  return getVisibleExportColumns(
+    thinkingSortHeaders,
+    visibleThinkingColumns,
+    "thinkingColumn",
+  );
 }
 
 function getSortedThinkingResults() {
-  return [...thinkingRun.results].sort((left, right) => {
-    const leftValue = getThinkingSortValue(left, thinkingSortState.key);
-    const rightValue = getThinkingSortValue(right, thinkingSortState.key);
-    if (isMissing(leftValue)) return isMissing(rightValue) ? 0 : 1;
-    if (isMissing(rightValue)) return -1;
-    const comparison = compareValues(leftValue, rightValue);
-    return thinkingSortState.direction === "ascending" ? comparison : -comparison;
-  });
+  return sortRowsByState(thinkingRun.results, getThinkingSortValue, thinkingSortState);
 }
 
 function getThinkingTotalValue(key) {
