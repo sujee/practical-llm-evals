@@ -1,9 +1,19 @@
 {
   "provider": "Nebius Token Factory",
   "provider_url": "https://tokenfactory.nebius.com/",
-  "updated_at": "2026-08-21",
+  "updated_at": "2026-08-28",
   "comment": "Prices in USD per 1M tokens. Blended pricing = 0.75 x input + 0.25 x output (3:1 mix). param_count in billions. context_window_K in K tokens (1K = 1024 tokens).  Only showing latest models. AA Intelligence Index is measured on max/high reasoning. (higher is better).",
   "models": [
+        {
+      "model_id": "zai-org/GLM-5.3-Flash",
+      "model_release_date": "2026-08-28",
+      "aa_intelligence_index": 57,
+      "param_count": 320,
+      "context_window_K": 1024,
+      "price_input_1m": 0.15,
+      "price_output_1m": 0.50,
+      "pricing_blended_1m": 0.2375
+    },
     {
       "model_id": "nvidia/Nemotron-3_5-Lightning",
       "model_release_date": "2026-08-11",
@@ -32,7 +42,7 @@
       "context_window_K": 1024,
       "price_input_1m": 3.0,
       "price_output_1m": 15.0,
-      "pricing_blended_1m": 6.0
+      "pricing_blended_1m": 6
     },
     {
       "model_id": "zai-org/GLM-5.2",
@@ -91,7 +101,7 @@
       "param_count": 1000,
       "context_window_K": 256,
       "price_input_1m": 0.95,
-      "price_output_1m": 4.0,
+      "price_output_1m": 4,
       "pricing_blended_1m": 1.7125
     },
     {
