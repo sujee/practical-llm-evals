@@ -138,8 +138,8 @@
                     "fine_tune"
                 ],
                 "context_window_k": 1024,
-                "max_model_len": 1048576,
-                "tokens_per_second": 157,
+                "max_model_len": 1024000,
+                "tokens_per_second": 25,
                 "input_price_per_million_tokens": 0.14,
                 "output_price_per_million_tokens": 0.28,
                 "quantization": "fp8"
@@ -610,6 +610,7 @@
             "reasoning",
             "context_and_rag"
         ],
+        "policy_url": "https://docs.tokenfactory.nebius.com/legal/acceptable-use-policy",
         "license": {
             "url": "https://huggingface.co/moonshotai/Kimi-K3/blob/main/LICENSE",
             "name": "Kimi K3 License",
@@ -1205,8 +1206,8 @@
                 "label": "cheap",
                 "regions": [
                     {
-                        "country_code": "US",
-                        "name": "us-central1"
+                        "country_code": "FI",
+                        "name": "eu-north1"
                     }
                 ],
                 "external_provider": false,
@@ -1954,6 +1955,65 @@
                 "input_price_per_million_tokens": 1.4,
                 "output_price_per_million_tokens": 4.4,
                 "quantization": "fp4"
+            }
+        ],
+        "context_window_k": 1024
+    },
+    {
+        "type": "text2text",
+        "name": "GLM-5.3-Flash",
+        "created_at": 1787872621,
+        "status": "active",
+        "huggingface_url": "https://huggingface.co/zai-org/GLM-5.3-Flash",
+        "description": "Z.ai's 320B-parameter, 18B-active mixture-of-experts model for coding, agentic workflows, reasoning, tool use, and long-context tasks.",
+        "vendor": "zai-org",
+        "tags": [],
+        "use_cases": [
+            "dedicated-endpoint",
+            "text",
+            "code",
+            "function_calling",
+            "reasoning",
+            "context_and_rag",
+            "responses_api"
+        ],
+        "license": {
+            "url": "https://huggingface.co/datasets/choosealicense/licenses/blob/main/markdown/mit.md",
+            "name": "MIT License",
+            "type": ""
+        },
+        "size_b": 0,
+        "quality": 0,
+        "flavors": [
+            {
+                "model_id": "zai-org/GLM-5.3-Flash",
+                "model_type": "text2text",
+                "model_name": "GLM-5.3-Flash",
+                "model_description": "Z.ai's 320B-parameter, 18B-active mixture-of-experts model for coding, agentic workflows, reasoning, tool use, and long-context tasks.",
+                "label": "cheap",
+                "regions": [
+                    {
+                        "country_code": "US",
+                        "name": "us-central1"
+                    }
+                ],
+                "external_provider": false,
+                "tags": [],
+                "use_cases": [
+                    "dedicated-endpoint",
+                    "text",
+                    "code",
+                    "function_calling",
+                    "reasoning",
+                    "context_and_rag",
+                    "responses_api"
+                ],
+                "context_window_k": 1024,
+                "max_model_len": 1024000,
+                "tokens_per_second": 349,
+                "input_price_per_million_tokens": 0.15,
+                "output_price_per_million_tokens": 0.5,
+                "quantization": "fp8"
             }
         ],
         "context_window_k": 1024
