@@ -13,7 +13,7 @@ Some visualizations for Token Factory models.
 
 ## Getting Model Info
 
-[Latest models list file](tf-models-list.json)
+[Latest models list file](../data/tf-models-list.json)
 
 Available here : https://tokenfactory.nebius.com/api/public/models_info  
 
