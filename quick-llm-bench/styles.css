@@ -47,6 +47,15 @@ textarea {
   margin-bottom: 42px;
 }
 
+.hero .repo-link {
+  margin-top: 12px;
+}
+
+.hero .repo-link a {
+  color: inherit;
+  opacity: 0.6;
+}
+
 h1,
 h2,
 p {
