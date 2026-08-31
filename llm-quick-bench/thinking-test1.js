@@ -13,7 +13,7 @@
 
 const MAX_THINKING_ROWS = 200;
 
-const thinkingColumnPreferenceKey = "quick-llm-bench:thinking-columns:v5";
+const thinkingColumnPreferenceKey = "llm-quick-bench:thinking-columns:v5";
 const defaultThinkingColumns = [
   "modelId",
   "status",

@@ -8,7 +8,7 @@ Use these browser-based tools to compare endpoint speed, model quality, pricing,
 
 | Project | What it does | Try it live |
 | --- | --- | --- |
-| ⚡ [**Quick LLM Bench**](./quick-llm-bench/README.md) | Measures streaming performance and reasoning quality across LLM endpoints, including time to first token, token throughput, end-to-end latency, accuracy, and cost. | [Try it live →](https://sujee.github.io/practical-llm-evals/quick-llm-bench/) |
+| ⚡ [**Quick LLM Bench**](./llm-quick-bench/README.md) | Measures streaming performance and reasoning quality across LLM endpoints, including time to first token, token throughput, end-to-end latency, accuracy, and cost. | [Try it live →](https://sujee.github.io/practical-llm-evals/llm-quick-bench/) |
 | 📊 [**Nebius Token Factory Model Visualizer**](./providers/nebius-token-factory/model-visualizer/README.md) | Explores model intelligence, pricing, release timelines, and context-window trends. | [Explore models →](https://sujee.github.io/practical-llm-evals/providers/nebius-token-factory/model-visualizer/) |
 
 ## Fun benchmarks and projects

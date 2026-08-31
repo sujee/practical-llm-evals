@@ -63,7 +63,7 @@ const benchmarkSortHeaders = [...document.querySelectorAll("[data-benchmark-colu
 const benchmarkColumnOptions = document.querySelector("#benchmark-column-options");
 const showAllColumnsButton = document.querySelector("#show-all-columns");
 const benchmarkColumnKeys = benchmarkSortHeaders.map((header) => header.dataset.benchmarkColumn);
-const benchmarkColumnPreferenceKey = "quick-llm-bench:benchmark-columns:v8";
+const benchmarkColumnPreferenceKey = "llm-quick-bench:benchmark-columns:v8";
 
 const endpointPresets = {
   nebius: {
