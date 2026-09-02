@@ -16,6 +16,10 @@ The application version is the positive integer `LLM_QUICK_BENCH_VERSION` value 
 
 Every commit must increment the version by exactly one. Use integers only—never semantic versions, decimals, or dotted version strings. Include the version update in the same commit as the associated changes.
 
+## Git Discipline
+
+Never commit or push automatically. Always ask the user for explicit approval before each commit and before each push.
+
 ## Publishing
 
 Publishing happens only from the `main` branch and its worktree.

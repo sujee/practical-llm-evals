@@ -36,10 +36,12 @@ test("GitHub badge is local and does not depend on Shields", () => {
   assert.match(badge, /aria-label="GitHub"/);
 });
 
-test("repository instructions require a version bump and main-only publishing", () => {
+test("repository instructions require approval, a version bump, and main-only publishing", () => {
   const instructions = fs.readFileSync(path.join(projectRoot, "AGENTS.md"), "utf8");
   assert.match(instructions, /Every commit must increment the version by exactly one\./);
   assert.match(instructions, /Use integers only/);
+  assert.match(instructions, /Never commit or push automatically\./);
+  assert.match(instructions, /explicit approval before each commit and before each push\./);
   assert.match(instructions, /Publishing happens only from the `main` branch/);
   assert.match(instructions, /Push `main` to `origin`\./);
 });
