@@ -47,13 +47,22 @@ textarea {
   margin-bottom: 42px;
 }
 
-.hero .repo-link {
+.hero .hero-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-top: 12px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
-.hero .repo-link a {
+.hero .hero-meta a {
   color: inherit;
-  opacity: 0.6;
+}
+
+.app-version {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 h1,
