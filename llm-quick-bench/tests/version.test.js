@@ -22,7 +22,18 @@ test("application version is a positive integer and renders in the header", () =
 
   const html = fs.readFileSync(path.join(projectRoot, "index.html"), "utf8");
   assert.match(html, /<script src="version\.js" defer><\/script>/);
-  assert.match(html, /id="app-version"/);
+  assert.match(html, /id="app-version"[\s\S]*assets\/github-badge\.svg/);
+});
+
+test("GitHub badge is local and does not depend on Shields", () => {
+  const html = fs.readFileSync(path.join(projectRoot, "index.html"), "utf8");
+  const badgePath = path.join(projectRoot, "assets", "github-badge.svg");
+  const badge = fs.readFileSync(badgePath, "utf8");
+
+  assert.doesNotMatch(html, /shields\.io/i);
+  assert.match(html, /src="assets\/github-badge\.svg"/);
+  assert.match(badge, /View on GitHub/);
+  assert.match(badge, /aria-label="GitHub"/);
 });
 
 test("repository instructions require a version bump and main-only publishing", () => {

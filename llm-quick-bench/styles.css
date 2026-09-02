@@ -57,12 +57,25 @@ textarea {
   font-weight: 700;
 }
 
-.hero .hero-meta a {
-  color: inherit;
-}
-
 .app-version {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.github-badge-link {
+  display: inline-flex;
+  border-radius: 6px;
+  line-height: 0;
+}
+
+.github-badge-link:focus-visible {
+  outline: 3px solid rgba(13, 107, 77, 0.2);
+  outline-offset: 3px;
+}
+
+.github-badge {
+  display: block;
+  width: 134px;
+  height: 28px;
 }
 
 h1,
