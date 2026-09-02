@@ -12,9 +12,9 @@ If the tests fail, fix the failure and rerun the full suite. If the suite cannot
 
 ## Versioning
 
-The application version is the `LLM_QUICK_BENCH_VERSION` value in `version.js` and follows semantic versioning.
+The application version is the positive integer `LLM_QUICK_BENCH_VERSION` value in `version.js`. It is displayed with a `v` prefix, such as `v2`.
 
-Every commit must increase the version. Use a patch increment by default; use a minor or major increment when the change warrants it or the user requests it. Include the version update in the same commit as the associated changes.
+Every commit must increment the version by exactly one. Use integers only—never semantic versions, decimals, or dotted version strings. Include the version update in the same commit as the associated changes.
 
 ## Publishing
 
