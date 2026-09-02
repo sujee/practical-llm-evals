@@ -844,52 +844,6 @@ code {
   overflow-wrap: anywhere;
 }
 
-.benchmark-table th {
-  padding: 0;
-  color: #59625f;
-  font-size: 0.68rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.benchmark-table {
-  table-layout: fixed;
-  font-size: 0.76rem;
-}
-
-.benchmark-table th,
-.benchmark-table td {
-  padding: 11px 9px;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.benchmark-table .sort-button {
-  min-height: 56px;
-  padding: 10px 9px;
-  font-size: 0.62rem;
-  line-height: 1.25;
-  white-space: normal;
-}
-
-.benchmark-table th[data-benchmark-column="modelId"] { width: 16%; }
-.benchmark-table th[data-benchmark-column="status"] { width: 10%; }
-.benchmark-table th[data-benchmark-column="ttftMedian"],
-.benchmark-table th[data-benchmark-column="ttftP95"],
-.benchmark-table th[data-benchmark-column="tpsMedian"],
-.benchmark-table th[data-benchmark-column="tpsP95"],
-.benchmark-table th[data-benchmark-column="e2eMedian"],
-.benchmark-table th[data-benchmark-column="e2eP95"] { width: 7%; }
-.benchmark-table th[data-benchmark-column="totalTestTimeMs"] { width: 8%; }
-.benchmark-table th[data-benchmark-column="totalTokens"] { width: 14%; }
-.benchmark-table th[data-benchmark-column="cost"] { width: 10%; }
-
-.benchmark-table td:first-child {
-  max-width: 300px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .thinking-table th {
   padding: 0;
   color: #59625f;
@@ -1025,6 +979,51 @@ code {
 .status-pill.complete { background: var(--accent-soft); color: var(--accent-dark); }
 .status-pill.partial { background: #fff1ca; color: #775512; }
 .status-pill.error { background: var(--danger-soft); color: var(--danger); }
+
+.status-has-error {
+  cursor: help;
+}
+
+.status-error-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  color: var(--danger);
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1;
+  vertical-align: middle;
+  cursor: help;
+}
+
+.status-error-indicator:focus-visible {
+  border-radius: 50%;
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+}
+
+.benchmark-error-tooltip {
+  position: fixed;
+  z-index: 200;
+  width: max-content;
+  max-width: min(360px, calc(100vw - 24px));
+  padding: 9px 11px;
+  border: 1px solid #4f5b56;
+  border-radius: 8px;
+  background: #17201d;
+  color: #f5f8f6;
+  font-size: 0.75rem;
+  font-weight: 650;
+  line-height: 1.4;
+  white-space: pre-line;
+  pointer-events: none;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24);
+}
+
+.benchmark-error-tooltip[hidden] {
+  display: none;
+}
 
 .accuracy-high { background: #e6f5e9 !important; }
 .accuracy-mid { background: #fff9db !important; }
@@ -1355,4 +1354,206 @@ td:first-child {
     margin-left: 18px;
     margin-right: 18px;
   }
+}
+
+/* --- Speed Test 1 (token throughput over time) --- */
+
+.speed-table {
+  width: 100%;
+  table-layout: fixed;
+  font-size: 0.78rem;
+}
+
+.speed-table th,
+.speed-table td {
+  padding: 11px 9px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.speed-table tbody tr:nth-child(even) td {
+  background: rgba(247, 248, 244, 0.72);
+}
+
+.speed-graphs-section {
+  margin: 30px 30px 4px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+
+.speed-graphs-section > h3 {
+  margin: 0 0 6px;
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+}
+
+#speed-graphs {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.speed-graph-panel {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.speed-graph-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: #f8f9f5;
+}
+
+.speed-graph-head h4 {
+  margin: 0;
+  overflow: hidden;
+  font-size: 0.84rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.speed-graph-head span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.speed-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 280px;
+}
+
+.speed-graph-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 140px;
+  margin: 12px;
+  padding: 16px;
+  border: 1.5px dashed var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.sp-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.sp-axis {
+  stroke: #aab4ae;
+  stroke-width: 1.5;
+}
+
+.sp-tick {
+  fill: #929b97;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+}
+
+.sp-label {
+  fill: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.sp-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  opacity: 0.55;
+}
+
+.sp-bar {
+  stroke-width: 1.2;
+}
+
+.sp-bar-throughput {
+  fill: #b9dfd1;
+  stroke: #5d9f87;
+}
+
+.sp-ref {
+  stroke-width: 1.5;
+}
+
+.sp-ref-p50 {
+  stroke: #d97706;
+  stroke-dasharray: 6 3;
+}
+
+.speed-throughput-chart {
+  position: relative;
+  padding: 16px;
+}
+
+.speed-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 0 0 8px 30px;
+}
+
+.speed-chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.speed-chart-legend-item::before {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  content: "";
+}
+
+.speed-chart-legend-item.throughput::before {
+  border: 1px solid #5d9f87;
+  background: #b9dfd1;
+}
+
+.speed-chart-legend-item.p50::before {
+  height: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.speed-chart-legend-item.p50::before {
+  border-top: 2px dashed #d97706;
+}
+
+.speed-tooltip {
+  position: fixed;
+  z-index: 50;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #17201d;
+  color: #e9f2ed;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
 }

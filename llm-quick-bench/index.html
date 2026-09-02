@@ -10,7 +10,7 @@
     <title>LLM Quick Bench - Streaming Performance</title>
     <link rel="stylesheet" href="styles.css" />
     <script src="bench-utils.js" defer></script>
-    <script src="raw-speed-test1.js" defer></script>
+    <script src="speed-test1.js" defer></script>
     <script src="thinking-test1.js" defer></script>
   </head>
   <body>
@@ -35,15 +35,15 @@
           Models
         </button>
         <button
-          id="raw-speed-test1-tab"
+          id="speed-test-tab"
           class="tab-button"
           type="button"
           role="tab"
           aria-selected="false"
-          aria-controls="raw-speed-test1-panel"
+          aria-controls="speed-test-panel"
           tabindex="-1"
         >
-          Raw Speed Test 1
+          Speed Test 1
         </button>
         <button
           id="thinking-test1-tab"
@@ -127,6 +127,15 @@
           <h2 id="results-heading">Available models</h2>
           <div class="results-actions">
             <span id="model-count" class="count"></span>
+            <span class="column-picker-cue">Select columns <span aria-hidden="true">→</span></span>
+            <details class="column-picker">
+              <summary class="secondary-button" aria-label="Select visible model columns">Columns</summary>
+              <div class="column-menu">
+                <p>Available models</p>
+                <div id="model-column-options" class="column-options"></div>
+                <button id="show-all-model-columns" class="column-reset" type="button">Show all</button>
+              </div>
+            </details>
             <button id="export-models-csv" class="secondary-button" type="button">Export CSV</button>
             <button id="export-models-json" class="secondary-button" type="button">Export JSON</button>
           </div>
@@ -162,25 +171,26 @@
       </section>
       </div>
 
+
       <div
-        id="raw-speed-test1-panel"
+        id="speed-test-panel"
         class="tab-panel"
         role="tabpanel"
-        aria-labelledby="raw-speed-test1-tab"
+        aria-labelledby="speed-test-tab"
         hidden
       >
-      <section id="benchmark" class="benchmark" aria-label="Raw Speed Test 1 benchmark">
-        <section class="methodology-overview" aria-labelledby="methodology-heading">
-          <h3 id="methodology-heading">What Raw Speed Test 1 measures</h3>
-          <p>How fast the endpoint can produce output tokens. Think of it as the "max ceiling" for output production.</p>
+      <section id="speed-benchmark" class="benchmark" aria-label="Speed Test 1 benchmark">
+        <section class="methodology-overview" aria-labelledby="speed-methodology-heading">
+          <h3 id="speed-methodology-heading">What Speed Test 1 measures</h3>
+          <p>Measures raw output-generation speed and charts one tokens-per-second value for each measured run.</p>
           <div class="methodology-metrics">
             <div>
               <strong>Time to first token</strong>
               <span>Delay from request dispatch to the first generated token.</span>
             </div>
             <div>
-              <strong>Token throughput</strong>
-              <span>Completion tokens delivered per second after generation begins.</span>
+              <strong>Throughput</strong>
+              <span>tok/s per measured run, summarized by the p50 (median).</span>
             </div>
             <div>
               <strong>End-to-end latency</strong>
@@ -189,164 +199,106 @@
           </div>
         </section>
 
-        <form id="benchmark-form" class="benchmark-form">
+        <form id="speed-form" class="benchmark-form">
           <div class="field">
-            <label for="runs">Measured runs</label>
-            <input id="runs" type="number" min="1" max="20" value="10" required />
+            <label for="speed-runs">Measured runs</label>
+            <input id="speed-runs" type="number" min="1" max="20" value="10" required />
             <p class="hint">Per model, after one excluded warm-up.</p>
           </div>
           <div class="field">
-            <label for="max-tokens">Max output tokens</label>
-            <input id="max-tokens" type="number" min="32" max="4096" value="1024" required />
-            <p class="hint">Longer outputs stabilize throughput.</p>
+            <label for="speed-max-tokens">Max output tokens</label>
+            <input id="speed-max-tokens" type="number" min="32" max="4096" value="1024" required />
+            <p class="hint">Longer outputs stabilize the throughput curve.</p>
           </div>
           <div class="field">
-            <label for="concurrency">Parallel models to test</label>
-            <input id="concurrency" type="number" min="1" max="12" value="3" required />
+            <label for="speed-concurrency">Parallel models to test</label>
+            <input id="speed-concurrency" type="number" min="1" max="12" value="3" required />
             <p class="hint">Runs for the same model stay serial.</p>
           </div>
           <div class="field">
-            <label for="timeout">Timeout / request (sec)</label>
-            <input id="timeout" type="number" min="10" max="600" value="120" required />
+            <label for="speed-timeout">Timeout / request (sec)</label>
+            <input id="speed-timeout" type="number" min="10" max="600" value="120" required />
             <p class="hint">Stops stalled streams cleanly.</p>
           </div>
           <div class="field prompt-field">
-            <label for="benchmark-prompt">Prompt</label>
-            <textarea id="benchmark-prompt" rows="3" required>Output lowercase English words separated by single spaces. Do not use punctuation or add any other text. Begin immediately and continue until stopped.</textarea>
-            <p class="hint">A short prompt keeps this test focused on output-generation speed. Fixed output length provides a stable measurement window.</p>
+            <label for="speed-prompt">Prompt</label>
+            <textarea id="speed-prompt" rows="3" required>Output lowercase English words separated by single spaces. Do not use punctuation or add any other text. Begin immediately and continue until stopped.</textarea>
+            <p class="hint">A short prompt keeps this test focused on output-generation speed.</p>
           </div>
           <fieldset class="benchmark-options">
             <legend>Request options</legend>
             <div class="benchmark-toggle-control">
-              <label for="disable-thinking">
-                <input id="disable-thinking" type="checkbox" checked />
+              <label for="speed-disable-thinking">
+                <input id="speed-disable-thinking" type="checkbox" checked />
                 <span>Disable thinking</span>
               </label>
               <p class="hint">Adds <code>chat_template_kwargs: { enable_thinking: false }</code> to every request.</p>
             </div>
             <div class="benchmark-toggle-control">
-              <label for="fixed-output">
-                <input id="fixed-output" type="checkbox" checked />
+              <label for="speed-fixed-output">
+                <input id="speed-fixed-output" type="checkbox" checked />
                 <span>Force fixed output length</span>
               </label>
               <p class="hint">Sends <code>min_tokens</code> equal to max output tokens and <code>ignore_eos: true</code>. Requires a compatible endpoint.</p>
             </div>
             <div class="benchmark-toggle-control">
-              <label for="require-server-tokens">
-                <input id="require-server-tokens" type="checkbox" checked />
+              <label for="speed-require-server-tokens">
+                <input id="speed-require-server-tokens" type="checkbox" checked />
                 <span>Require server token counts</span>
               </label>
               <p class="hint">Fails a request when streaming usage is missing instead of estimating tokens.</p>
             </div>
             <div class="benchmark-toggle-control">
-              <label for="log-console">
-                <input id="log-console" type="checkbox" />
+              <label for="speed-log-console">
+                <input id="speed-log-console" type="checkbox" />
                 <span>Log requests and responses to the browser console</span>
               </label>
               <p class="hint">Logs the HTTP-style request, exact SSE chunks, assembled output, summaries, and errors. The API key is always redacted.</p>
             </div>
           </fieldset>
           <div class="run-actions">
-            <button id="run-button" class="primary-button" type="submit" disabled>
+            <button id="speed-run-button" class="primary-button" type="submit" disabled>
               <span>Run selected</span><span aria-hidden="true">→</span>
             </button>
-            <button id="cancel-button" class="secondary-button" type="button" hidden>Cancel</button>
+            <button id="speed-cancel-button" class="secondary-button" type="button" hidden>Cancel</button>
           </div>
         </form>
 
-        <div id="benchmark-status" class="status" role="status" aria-live="polite"></div>
+        <div id="speed-status" class="status" role="status" aria-live="polite"></div>
 
-        <div id="benchmark-results" class="benchmark-results">
+        <div id="speed-results" class="benchmark-results">
           <div class="result-toolbar">
-            <p class="metric-note">Lower latency is better · Higher tok/s is better · Warm-up excluded from performance summaries</p>
+            <p class="metric-note">Higher tok/s is better · Warm-up excluded from throughput summaries</p>
             <div class="export-actions">
+              <span class="column-picker-cue">Select columns <span aria-hidden="true">→</span></span>
               <details class="column-picker">
-                <summary class="secondary-button">Columns</summary>
+                <summary class="secondary-button" aria-label="Select visible Speed Test columns">Columns</summary>
                 <div class="column-menu">
-                  <p>Benchmark results</p>
-                  <div id="benchmark-column-options" class="column-options"></div>
-                  <button id="show-all-columns" class="column-reset" type="button">Show all</button>
+                  <p>Speed test results</p>
+                  <div id="speed-column-options" class="column-options"></div>
+                  <button id="show-all-speed-columns" class="column-reset" type="button">Show all</button>
                 </div>
               </details>
-              <button id="export-csv" class="secondary-button" type="button">Export CSV</button>
-              <button id="export-json" class="secondary-button" type="button">Export JSON</button>
+              <button id="export-speed-csv" class="secondary-button" type="button">Export CSV</button>
+              <button id="export-speed-json" class="secondary-button" type="button">Export JSON</button>
             </div>
           </div>
           <div class="table-frame">
-            <table class="benchmark-table">
-              <thead>
-                <tr>
-                  <th scope="col" data-benchmark-column="modelId"><button class="sort-button" type="button"><span>Model</span><span class="sort-icon" aria-hidden="true">↑</span></button></th>
-                  <th scope="col" data-benchmark-column="status"><button class="sort-button" type="button"><span>Status</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
-                  <th scope="col" data-benchmark-column="ttftMedian"><button class="sort-button" type="button"><span>TTFT median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
-                  <th scope="col" data-benchmark-column="ttftP95"><button class="sort-button" type="button"><span>TTFT p95</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
-                  <th scope="col" data-benchmark-column="tpsMedian"><button class="sort-button" type="button"><span>Tok/s median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
-                  <th scope="col" data-benchmark-column="tpsP95"><button class="sort-button" type="button"><span>Tok/s p95</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
-                  <th scope="col" data-benchmark-column="e2eMedian"><button class="sort-button" type="button"><span>E2E median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
-                  <th scope="col" data-benchmark-column="e2eP95"><button class="sort-button" type="button"><span>E2E p95</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
-                  <th scope="col" data-benchmark-column="totalTestTimeMs"><button class="sort-button" type="button"><span>Test time</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
-                  <th scope="col" data-benchmark-column="totalTokens"><button class="sort-button" type="button"><span>Benchmark tokens</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
-                  <th scope="col" data-benchmark-column="cost"><button class="sort-button" type="button"><span>Cost</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
-                </tr>
-              </thead>
-              <tbody id="benchmark-body"></tbody>
-            </table>
+            <div id="speed-body"></div>
           </div>
-          <div class="run-summary" aria-label="Total benchmark usage and cost">
-            <div><span>Run time</span><strong id="summary-time">-</strong></div>
-            <div><span>Input tokens</span><strong id="summary-input-tokens">-</strong></div>
-            <div><span>Output tokens</span><strong id="summary-output-tokens">-</strong></div>
-            <div><span>Total tokens</span><strong id="summary-total-tokens">-</strong></div>
-            <div><span>Estimated cost</span><strong id="summary-cost">-</strong></div>
+          <div class="run-summary" aria-label="Total Speed Test 1 usage and cost">
+            <div><span>Run time</span><strong id="speed-summary-time">-</strong></div>
+            <div><span>Total tokens</span><strong id="speed-summary-total-tokens">-</strong></div>
+            <div><span>Estimated cost</span><strong id="speed-summary-cost">-</strong></div>
           </div>
-          <p id="usage-note" class="table-hint">Results will appear here after a raw speed benchmark run.</p>
+          <p id="speed-usage-note" class="table-hint">Results will appear here after a Speed Test 1 run.</p>
         </div>
 
-        <details class="methodology-details" open>
-          <summary>Testing methodology</summary>
-          <div class="methodology">
-            <ul>
-              <li><strong>TTFT</strong> runs from request dispatch to the first non-empty content or reasoning delta.</li>
-              <li><strong>Tok/s</strong> divides completion tokens by elapsed streaming time after that first delta.</li>
-              <li><strong>End-to-end latency</strong> runs from request dispatch until the response stream closes.</li>
-              <li>One warm-up request runs per model. It is excluded from latency summaries but included in test time, token usage, and cost.</li>
-              <li>Total run time is wall-clock time; parallel model times are not summed.</li>
-              <li>Cost uses each model's displayed input and output price per million tokens; models without pricing remain unpriced.</li>
-              <li>Output health is diagnostic only. Missing final content and unusually short output produce warnings without invalidating runs; reaching the configured token ceiling is expected.</li>
-              <li>The quick preset uses a short, unpadded prompt and targets exactly 1,024 output tokens at concurrency 3. Actual token counts come from server usage.</li>
-              <li>TTFT therefore represents short-prompt latency. Long-context prefill performance should be measured separately with controlled input sizes.</li>
-              <li>Models run in parallel; measured runs for a given model remain serial. Use concurrency 1 for an isolated latency baseline.</li>
-              <li>Model scheduling order is randomized and recorded in the raw export to reduce time-of-run bias.</li>
-              <li class="methodology-request-item">
-                <details class="methodology-request">
-                  <summary>Benchmark request</summary>
-                  <p class="sample-request-note">Live request template based on the current settings. The selected model is inserted when the test runs, and the API key is always redacted.</p>
-                  <pre class="sample-request"><code id="request-template-code"></code></pre>
-                </details>
-              </li>
-              <li class="methodology-sample-item">
-                <details class="sample-exchange">
-                  <summary>Sample request</summary>
-                  <p id="sample-request-note" class="sample-request-note">Captured from a completed measured run. The API key is redacted.</p>
-                  <pre class="sample-request"><code id="sample-request-code"></code></pre>
-                </details>
-              </li>
-            </ul>
-            <div class="sample-exchanges">
-              <details class="sample-exchange">
-                <summary>Sample streaming response</summary>
-                <p id="sample-response-note" class="sample-request-note">Raw response headers and every decoded network chunk from the same measured run. Chunk labels are added by the benchmark.</p>
-                <pre class="sample-request"><code id="sample-response-code"></code></pre>
-              </details>
-              <details class="sample-exchange">
-                <summary>Consolidated output</summary>
-                <p id="sample-output-note" class="sample-request-note">All generated deltas from the same measured run, assembled in arrival order.</p>
-                <pre class="sample-request"><code id="sample-output-code"></code></pre>
-              </details>
-            </div>
-          </div>
-        </details>
-
+        <section class="speed-graphs-section" aria-labelledby="speed-graphs-heading">
+          <h3 id="speed-graphs-heading">Token throughput per run</h3>
+          <p class="metric-note">One chart per model with one tok/s bar per run. A dashed p50 line summarizes the completed runs.</p>
+          <div id="speed-graphs"></div>
+        </section>
       </section>
       </div>
 
@@ -479,8 +431,6 @@ Output nothing else. Do not include reasoning, explanations, labels, markdown, o
                   <th scope="col" data-thinking-column="formatCompliance"><button class="sort-button" type="button"><span>Format%</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
                   <th scope="col" data-thinking-column="ttftMedian" title="Median (P50)"><button class="sort-button" type="button"><span>TTFT median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
                   <th scope="col" data-thinking-column="ttftP95"><button class="sort-button" type="button"><span>TTFT p95</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
-                  <th scope="col" data-thinking-column="tpsMedian" title="Median (P50)"><button class="sort-button" type="button"><span>Tok/s median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
-                  <th scope="col" data-thinking-column="tpsP95"><button class="sort-button" type="button"><span>Tok/s p95</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
                   <th scope="col" data-thinking-column="e2eMedian" title="Median (P50)"><button class="sort-button" type="button"><span>E2E median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
                   <th scope="col" data-thinking-column="e2eP95"><button class="sort-button" type="button"><span>E2E p95</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
                   <th scope="col" data-thinking-column="reasoningTokensMedian"><button class="sort-button" type="button"><span>Reasoning tok median</span><span class="sort-icon" aria-hidden="true">↕</span></button></th>
@@ -512,10 +462,10 @@ Output nothing else. Do not include reasoning, explanations, labels, markdown, o
               <li><strong>Scores are unique integers</strong> in a range larger than the row count, so there is always exactly one highest-scoring row with no ties to break.</li>
               <li><strong>Names are deterministic</strong> labels in the form <code>user-1</code>, <code>user-2</code>, and so on, so every row's name is unique within a question.</li>
               <li><strong>Row order is shuffled</strong> with a per-question seed, so the highest-scoring row is uniformly distributed across positions - the model cannot shortcut by reading the first or last row.</li>
-              <li><strong>Grading</strong> requires the model's entire final content to contain exactly one <code>&lt;id&gt;|&lt;name&gt;</code> line (reasoning deltas are ignored and surrounding whitespace is tolerated). The id must use canonical positive-integer syntax and the name must match case-insensitively. Accuracy is correct runs / total measured runs.</li>
+              <li><strong>Grading</strong> requires the model's entire final content to contain exactly one <code>&lt;id&gt;|&lt;name&gt;</code> line (reasoning deltas are ignored and surrounding whitespace is tolerated). The id must use canonical positive-integer syntax and the name must match case-insensitively. Accuracy is correct answers / attempted measured questions; failed requests count as incorrect and non-compliant.</li>
               <li><strong>Format compliance</strong> is tracked separately - a run can be format-compliant (a parseable <code>&lt;id&gt;|&lt;name&gt;</code> response) but incorrect, which separates "couldn't find the max" from "couldn't follow the format".</li>
               <li><strong>Reasoning tokens</strong> are estimated from the <code>reasoning_content</code> / <code>reasoning</code> SSE deltas and shown alongside answer tokens (final content). The split is estimated - the server only provides the total.</li>
-              <li><strong>TTFT</strong>, <strong>Tokens/sec</strong>, and <strong>End-to-end latency</strong> are measured the same way as Raw Speed Test 1 but on a per-question basis, so values reflect varying prompt sizes.</li>
+              <li><strong>TTFT</strong> and <strong>End-to-end latency</strong> are measured the same way as Speed Test 1 but on a per-question basis, so values reflect varying prompt sizes.</li>
               <li><strong>Cost per correct answer</strong> = total cost ÷ correct runs. A model with high accuracy and low cost ranks first. Models with zero correct runs show "-".</li>
               <li>One warm-up question runs per model. It is excluded from accuracy, latency, and token summaries but included in test time, token usage, and cost.</li>
               <li>Total run time is wall-clock time; parallel model times are not summed.</li>

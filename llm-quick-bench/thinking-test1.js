@@ -6,21 +6,21 @@
 // pre-computed answer. The prompt is regenerated per question from a deterministic
 // seed, so the model never sees the same table twice within a run.
 //
-// Shares the global lexical scope with bench-utils.js and raw-speed-test1.js (classic
+// Shares the global lexical scope with bench-utils.js and speed-test1.js (classic
 // <script> loaded with `defer`, in that order). Endpoint, streaming, scheduling,
 // summary, column-management, formatting, and export helpers live in bench-utils.js.
-// raw-speed-test1.js owns the model loader and shared selection/connection state.
+// speed-test1.js owns the model loader and shared selection/connection state.
 
 const MAX_THINKING_ROWS = 200;
 
-const thinkingColumnPreferenceKey = "llm-quick-bench:thinking-columns:v5";
+const thinkingColumnPreferenceKey = "llm-quick-bench:thinking-columns:v6";
 const defaultThinkingColumns = [
   "modelId",
   "status",
   "accuracy",
   "ttftMedian",
-  "tpsMedian",
   "e2eMedian",
+  "e2eP95",
   "totalTokens",
   "totalTestTimeMs",
   "cost",
@@ -64,20 +64,28 @@ const thinkingSampleOutputCode = document.querySelector("#thinking-sample-output
 let thinkingRun = null;
 let thinkingAbortController = null;
 let thinkingStartedAtMs = null;
-let thinkingClockInterval = null;
-let thinkingSortState = { key: "accuracy", direction: "descending" };
+let thinkingStopClock = null;
+let thinkingSampleCapturePending = false;
+const thinkingTableSorter = createTableSorter({
+  initialKey: "accuracy",
+  initialDirection: "descending",
+  onSort: renderThinkingResults,
+});
 let visibleThinkingColumns = loadVisibleThinkingColumns();
-if (!visibleThinkingColumns.has(thinkingSortState.key)) {
-  thinkingSortState = { key: [...visibleThinkingColumns][0], direction: "ascending" };
+if (!visibleThinkingColumns.has(thinkingTableSorter.state.key)) {
+  thinkingTableSorter.reset({
+    key: [...visibleThinkingColumns][0],
+    direction: "ascending",
+  });
 }
 
 thinkingCancelButton.addEventListener("click", () => thinkingAbortController?.abort());
 exportThinkingCsvButton.addEventListener("click", exportThinkingCsv);
 exportThinkingJsonButton.addEventListener("click", exportThinkingJson);
-thinkingSortHeaders.forEach((header) => {
-  header.querySelector("button").addEventListener("click", () => {
-    sortThinkingBy(header.dataset.thinkingColumn);
-  });
+thinkingTableSorter.bindHeaders({
+  headers: thinkingSortHeaders,
+  columnAttr: "thinkingColumn",
+  visibleColumns: visibleThinkingColumns,
 });
 [
   thinkingRowsInput,
@@ -103,8 +111,8 @@ updateThinkingRunButtonState();
 
 thinkingForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (benchmarkAbortController != null) {
-    setThinkingStatus("Raw Speed Test 1 is already running.", true);
+  if (typeof speedAbortController !== "undefined" && speedAbortController != null) {
+    setThinkingStatus("Speed Test 1 is already running.", true);
     return;
   }
   const selectedModels = models.filter((model) => model.selected);
@@ -152,9 +160,10 @@ thinkingForm.addEventListener("submit", async (event) => {
   thinkingRun.executionOrder = scheduledResults.map((result) => result.modelId);
   setThinkingRunning(true);
   thinkingResults.hidden = false;
-  renderThinkingResults();
+  renderBenchmarkSafely(renderThinkingResults, "Thinking Test 1 initial state");
   setThinkingStatus(`Running ${selectedModels.length} models with up to ${Math.min(config.concurrency, selectedModels.length)} in parallel…`);
 
+  let orchestrationFailed = false;
   try {
     await runWithConcurrency(
       scheduledResults,
@@ -170,29 +179,38 @@ thinkingForm.addEventListener("submit", async (event) => {
         : `Finished ${completed} model${completed === 1 ? "" : "s"}${partial ? `; ${partial} had failed runs` : ""}${failed ? `; ${failed} failed` : ""}.`,
       failed > 0 && completed === 0,
     );
+  } catch (error) {
+    orchestrationFailed = true;
+    console.error("[LLM Quick Bench] Thinking Test 1 orchestration failed.", error);
+    setThinkingStatus(error.message || "Thinking Test 1 stopped unexpectedly.", true);
   } finally {
-    thinkingRun.status = thinkingAbortController.signal.aborted ? "cancelled" : "complete";
+    const wasAborted = thinkingAbortController?.signal.aborted ?? false;
+    thinkingRun.status = deriveBenchmarkRunStatus(thinkingRun.results, {
+      wasAborted,
+      orchestrationFailed,
+    });
     thinkingRun.finishedAt = new Date().toISOString();
     thinkingRun.totalTestTimeMs = performance.now() - thinkingStartedAtMs;
     thinkingRun.usage = summarizeRunUsage(thinkingRun.results);
     thinkingRun.accuracy = summarizeRunThinkingAccuracy(thinkingRun.results);
-    setThinkingRunning(false);
-    renderThinkingResults();
     thinkingAbortController = null;
     thinkingStartedAtMs = null;
+    thinkingSampleCapturePending = false;
+    setThinkingRunning(false);
+    renderBenchmarkSafely(renderThinkingResults, "Thinking Test 1 final state");
   }
 });
 
 function updateThinkingRunButtonState() {
   thinkingRunButton.disabled = !models?.some((model) => model.selected)
     || modelsLoading
-    || benchmarkAbortController != null
+    || (typeof speedAbortController !== "undefined" && speedAbortController != null)
     || thinkingAbortController != null;
 }
 
 function setThinkingRunning(isRunning) {
   thinkingRunButton.disabled = isRunning
-    || benchmarkAbortController != null
+    || (typeof speedAbortController !== "undefined" && speedAbortController != null)
     || !models?.some((model) => model.selected)
     || modelsLoading;
   thinkingRunButton.firstElementChild.textContent = isRunning ? "Running…" : "Run selected";
@@ -204,9 +222,12 @@ function setThinkingRunning(isRunning) {
   connectionControls.forEach((control) => { control.disabled = isRunning; });
   modelSelectionButtons.forEach((button) => { button.disabled = isRunning; });
   document.querySelectorAll("#models-body .model-select").forEach((checkbox) => { checkbox.disabled = isRunning; });
-  // Cross-lock the Raw Speed Test 1 Run button so the two benchmarks can't run at once.
-  if (typeof runButton !== "undefined") {
-    runButton.disabled = isRunning || !models.some((model) => model.selected) || modelsLoading || benchmarkAbortController != null;
+  // Cross-lock Speed Test 1 so the two benchmarks can't run at once.
+  if (typeof speedRunButton !== "undefined") {
+    speedRunButton.disabled = isRunning
+      || speedAbortController != null
+      || !models.some((model) => model.selected)
+      || modelsLoading;
   }
   if (isRunning) startThinkingClock(); else stopThinkingClock();
 }
@@ -235,15 +256,27 @@ async function benchmarkThinkingModel(result, config, signal, connection, runSee
 }
 
 async function runThinkingCompletion(modelId, task, config, outerSignal, includeUsage, runLabel, connection) {
-  const stream = await runStreamingChatCompletion({
-    modelId,
-    config,
-    outerSignal,
-    runLabel,
-    connection,
-    body: buildThinkingRequestBody(modelId, config, task.prompt, includeUsage),
-    logName: "Thinking Test 1",
-  });
+  const captureExchange = runLabel.startsWith("run-")
+    && thinkingRun != null
+    && thinkingRun.sampleExchange == null
+    && !thinkingSampleCapturePending;
+  if (captureExchange) thinkingSampleCapturePending = true;
+  let stream;
+  try {
+    stream = await runStreamingChatCompletion({
+      modelId,
+      config,
+      outerSignal,
+      runLabel,
+      connection,
+      body: buildThinkingRequestBody(modelId, config, task.prompt, includeUsage),
+      logName: "Thinking Test 1",
+      captureExchange,
+    });
+  } catch (error) {
+    if (captureExchange) thinkingSampleCapturePending = false;
+    throw error;
+  }
   const extracted = extractThinkingAnswer(stream.contentText);
   const correct = gradeThinkingAnswer(extracted, task.expected);
   // The server only reports the total completion-token count; split it
@@ -293,8 +326,10 @@ async function runThinkingCompletion(modelId, task, config, outerSignal, include
     );
   }
 
+  const relevantMeasurement = { ...stream.measurement };
+  delete relevantMeasurement.tokensPerSecond;
   const measurement = {
-    ...stream.measurement,
+    ...relevantMeasurement,
     reasoningTokens,
     answerTokens,
     correct,
@@ -303,7 +338,7 @@ async function runThinkingCompletion(modelId, task, config, outerSignal, include
     expectedAnswer: `${task.expected.id}|${task.expected.name}`,
   };
 
-  if (runLabel.startsWith("run-") && thinkingRun && !thinkingRun.sampleExchange) {
+  if (captureExchange && thinkingRun && !thinkingRun.sampleExchange) {
     const gradingBlock = [
       "--- GRADING ---",
       `Expected: ${measurement.expectedAnswer}`,
@@ -325,8 +360,10 @@ async function runThinkingCompletion(modelId, task, config, outerSignal, include
       response: stream.response,
       consolidatedOutput: `${stream.consolidatedOutput}\n\n${gradingBlock}`,
     };
-    renderThinkingMethodologySample();
+    thinkingSampleCapturePending = false;
+    renderBenchmarkSafely(renderThinkingMethodologySample, "Thinking Test 1 sample exchange");
   }
+  if (captureExchange) thinkingSampleCapturePending = false;
 
   logBenchmarkEvent(config, "Thinking Test 1", "completion summary", {
     model: modelId,
@@ -482,10 +519,14 @@ function renderThinkingResults() {
   thinkingSummaryCost.title = runUsage.hasUnpriced
     ? "Some selected models have no pricing metadata; their usage is excluded from this cost total."
     : "Warm-up and measured questions are included.";
-  const totalCost = runUsage.pricedUsageCount > 0 ? runUsage.cost : null;
-  thinkingSummaryCostPerCorrect.textContent = totalCost === null || runAccuracy.correct === 0
-    ? "-"
-    : formatCost(totalCost / runAccuracy.correct);
+  const aggregateCostPerCorrect = calculateAggregateCostPerCorrect(
+    runUsage,
+    runAccuracy.correct,
+  );
+  thinkingSummaryCostPerCorrect.textContent = formatCost(aggregateCostPerCorrect);
+  thinkingSummaryCostPerCorrect.title = runUsage.hasUnpriced
+    ? "Unavailable because at least one model has usage without pricing metadata."
+    : "Total benchmark cost divided by correct measured runs.";
 
   updateThinkingSortHeaders();
   const sortedResults = getSortedThinkingResults();
@@ -496,9 +537,7 @@ function renderThinkingResults() {
     const accuracy = summarizeThinkingAccuracy(result);
     hasEstimates ||= usage.hasEstimated;
     hasUnpricedUsage ||= usage.requestCount > 0 && usage.cost === null;
-    const costPerCorrect = usage.cost === null || usage.cost === 0
-      ? null
-      : accuracy.correct > 0 ? usage.cost / accuracy.correct : null;
+    const costPerCorrect = calculateCostPerCorrect(usage.cost, accuracy.correct);
 
     const values = {
       modelId: result.modelId,
@@ -506,8 +545,6 @@ function renderThinkingResults() {
       accuracy,
       ttftMedian: formatMilliseconds(summary.ttftMedian),
       ttftP95: formatMilliseconds(summary.ttftP95),
-      tpsMedian: formatRate(summary.tpsMedian),
-      tpsP95: formatRate(summary.tpsP95),
       e2eMedian: formatMilliseconds(summary.e2eMedian),
       e2eP95: formatMilliseconds(summary.e2eP95),
       reasoningTokensMedian: formatInteger(
@@ -528,19 +565,16 @@ function renderThinkingResults() {
       : result.status === "partial" ? "partial"
       : result.status === "error" ? "error"
       : result.status === "queued" ? "" : "running";
-    const statusTitle = result.errors.length > 0 ? "Check console for errors." : "";
 
     const row = document.createElement("tr");
+    row.dataset.modelId = result.modelId;
     thinkingColumnKeys.forEach((key) => {
       const cell = document.createElement("td");
+      cell.dataset.thinkingColumn = key;
       cell.hidden = !visibleThinkingColumns.has(key);
-      cell.classList.toggle("sorted-column", thinkingSortState.key === key);
+      thinkingTableSorter.markCell(cell, key);
       if (key === "status") {
-        if (statusTitle) cell.title = statusTitle;
-        const pill = document.createElement("span");
-        pill.className = `status-pill ${statusClass}`.trim();
-        pill.textContent = values.status;
-        cell.append(pill);
+        renderBenchmarkStatusCell(cell, values.status, statusClass, result);
       } else if (key === "accuracy") {
         cell.textContent = formatRatioPercent(accuracy.accuracy, 1, accuracy.correct, accuracy.total);
         const accuracyHighlight = getAccuracyHighlightClass(accuracy.accuracy);
@@ -556,13 +590,15 @@ function renderThinkingResults() {
   });
 
   const notes = [
-    "Accuracy and format % include only successful measured runs; the warm-up question is excluded.",
+    "Accuracy and format % include measured attempts; failed requests count as incorrect and non-compliant. The warm-up question is excluded.",
     "Reasoning and answer token splits are estimated from character proportions; the server reports only the total.",
     "Cost per correct answer is total cost divided by correct runs; models with zero correct runs show -.",
     "Percentiles use nearest-rank selection across successful measured runs.",
   ];
   if (hasEstimates) notes.push("* Some token counts are estimated because the endpoint omitted streaming usage; compare their costs cautiously.");
-  if (hasUnpricedUsage) notes.push("Some models lack pricing metadata and are excluded from the total cost.");
+  if (hasUnpricedUsage) {
+    notes.push("Some models lack pricing metadata and are excluded from the total cost; aggregate cost per correct is unavailable for mixed priced and unpriced results.");
+  }
   thinkingUsageNote.textContent = notes.join(" ");
 }
 
@@ -575,6 +611,7 @@ function resetThinkingResults() {
   thinkingSummaryCost.textContent = "-";
   thinkingSummaryCost.removeAttribute("title");
   thinkingSummaryCostPerCorrect.textContent = "-";
+  thinkingSummaryCostPerCorrect.removeAttribute("title");
   thinkingUsageNote.textContent = "Results will appear here after a thinking benchmark run.";
   exportThinkingCsvButton.disabled = true;
   exportThinkingJsonButton.disabled = true;
@@ -582,17 +619,11 @@ function resetThinkingResults() {
   updateThinkingSortHeaders();
 }
 
-function sortThinkingBy(key) {
-  thinkingSortState = nextSortState(thinkingSortState, key);
-  renderThinkingResults();
-}
-
 function updateThinkingSortHeaders() {
-  updateSortHeaders({
+  thinkingTableSorter.updateHeaders({
     headers: thinkingSortHeaders,
     columnAttr: "thinkingColumn",
     visibleColumns: visibleThinkingColumns,
-    sortState: thinkingSortState,
   });
 }
 
@@ -607,8 +638,11 @@ function initializeThinkingColumnPicker() {
 }
 
 function onThinkingColumnVisibilityChange(visibleColumns) {
-  if (!visibleColumns.has(thinkingSortState.key)) {
-    thinkingSortState = { key: [...visibleColumns][0], direction: "ascending" };
+  if (!visibleColumns.has(thinkingTableSorter.state.key)) {
+    thinkingTableSorter.reset({
+      key: [...visibleColumns][0],
+      direction: "ascending",
+    });
   }
   saveVisibleThinkingColumns();
   renderThinkingResults();
@@ -638,9 +672,7 @@ function getThinkingSortValue(result, key) {
     result.runs.map((run) => run.answerTokens),
     0.5,
   );
-  const costPerCorrect = usage.cost === null || usage.cost === 0
-    ? null
-    : accuracy.correct > 0 ? usage.cost / accuracy.correct : null;
+  const costPerCorrect = calculateCostPerCorrect(usage.cost, accuracy.correct);
 
   const values = {
     modelId: result.modelId,
@@ -649,8 +681,6 @@ function getThinkingSortValue(result, key) {
     formatCompliance: accuracy.formatCompliance,
     ttftMedian: summary.ttftMedian,
     ttftP95: summary.ttftP95,
-    tpsMedian: summary.tpsMedian,
-    tpsP95: summary.tpsP95,
     e2eMedian: summary.e2eMedian,
     e2eP95: summary.e2eP95,
     reasoningTokensMedian,
@@ -661,29 +691,6 @@ function getThinkingSortValue(result, key) {
     totalTestTimeMs: result.totalTestTimeMs ?? getThinkingElapsedMs(result),
   };
   return values[key];
-}
-
-function summarizeThinkingAccuracy(result) {
-  const total = result.runs.length;
-  const correct = result.runs.filter((run) => run.correct).length;
-  const compliant = result.runs.filter((run) => run.formatCompliant).length;
-  return {
-    correct,
-    compliant,
-    total,
-    accuracy: total > 0 ? correct / total : null,
-    formatCompliance: total > 0 ? compliant / total : null,
-  };
-}
-
-function summarizeRunThinkingAccuracy(results) {
-  return results.reduce((total, result) => {
-    const accuracy = summarizeThinkingAccuracy(result);
-    total.correct += accuracy.correct;
-    total.compliant += accuracy.compliant;
-    total.total += accuracy.total;
-    return total;
-  }, { correct: 0, compliant: 0, total: 0 });
 }
 
 function formatRatioPercent(ratio, scale = 1, numerator = null, denominator = null) {
@@ -710,15 +717,30 @@ function getThinkingElapsedMs(result) {
 
 function startThinkingClock() {
   stopThinkingClock();
-  thinkingClockInterval = setInterval(() => {
-    if (thinkingRun?.status === "running") renderThinkingResults();
-  }, 1000);
+  thinkingStopClock = startThrottledClock(() => {
+    if (thinkingRun?.status === "running") updateThinkingElapsedTimes();
+  });
+}
+
+function updateThinkingElapsedTimes() {
+  if (!thinkingRun) return;
+  const elapsedMs = thinkingRun.totalTestTimeMs
+    ?? (thinkingStartedAtMs === null ? null : performance.now() - thinkingStartedAtMs);
+  thinkingSummaryTime.textContent = formatDuration(elapsedMs);
+  const resultsByModel = new Map(thinkingRun.results.map((result) => [result.modelId, result]));
+  thinkingBody.querySelectorAll("tr[data-model-id]").forEach((row) => {
+    const result = resultsByModel.get(row.dataset.modelId);
+    const cell = row.querySelector('[data-thinking-column="totalTestTimeMs"]');
+    if (result && cell) {
+      cell.textContent = formatDuration(result.totalTestTimeMs ?? getThinkingElapsedMs(result));
+    }
+  });
 }
 
 function stopThinkingClock() {
-  if (thinkingClockInterval) {
-    clearInterval(thinkingClockInterval);
-    thinkingClockInterval = null;
+  if (thinkingStopClock) {
+    thinkingStopClock();
+    thinkingStopClock = null;
   }
 }
 
@@ -792,16 +814,13 @@ function getVisibleThinkingExportColumns() {
 }
 
 function getSortedThinkingResults() {
-  return sortRowsByState(thinkingRun.results, getThinkingSortValue, thinkingSortState);
+  return thinkingTableSorter.sortRows(thinkingRun.results, getThinkingSortValue);
 }
 
 function getThinkingTotalValue(key) {
   const usage = summarizeRunUsage(thinkingRun.results);
   const accuracy = summarizeRunThinkingAccuracy(thinkingRun.results);
-  const totalCost = usage.pricedUsageCount > 0 ? usage.cost : null;
-  const costPerCorrect = totalCost !== null && accuracy.correct > 0
-    ? totalCost / accuracy.correct
-    : null;
+  const costPerCorrect = calculateAggregateCostPerCorrect(usage, accuracy.correct);
   const values = {
     modelId: "TOTAL RUN",
     status: thinkingRun.status,
@@ -809,8 +828,6 @@ function getThinkingTotalValue(key) {
     formatCompliance: accuracy.total > 0 ? accuracy.compliant / accuracy.total : null,
     ttftMedian: null,
     ttftP95: null,
-    tpsMedian: null,
-    tpsP95: null,
     e2eMedian: null,
     e2eP95: null,
     reasoningTokensMedian: null,

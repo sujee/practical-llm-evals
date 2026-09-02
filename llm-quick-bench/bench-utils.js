@@ -71,6 +71,23 @@ async function runWithConcurrency(items, concurrency, worker) {
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, runWorker));
 }
 
+// Drives a callback roughly once per `intervalMs` using requestAnimationFrame,
+// so the live test-time clock ticks without setInterval's fixed-wakeup cost and
+// pauses automatically when the tab is hidden. Returns a stop() function.
+function startThrottledClock(callback, intervalMs = 1000) {
+  let rafId = 0;
+  let lastFire = 0;
+  const loop = (now) => {
+    if (now - lastFire >= intervalMs) {
+      lastFire = now;
+      callback(now);
+    }
+    rafId = requestAnimationFrame(loop);
+  };
+  rafId = requestAnimationFrame(loop);
+  return () => cancelAnimationFrame(rafId);
+}
+
 function shuffleWithSeed(items, seed) {
   let state = seed >>> 0;
   const random = () => {
@@ -94,14 +111,75 @@ function percentile(values, probability) {
 }
 
 function summarizeRuns(runs) {
+  const tokensPerSecond = runs.map((run) => run.tokensPerSecond);
   return {
     ttftMedian: percentile(runs.map((run) => run.ttftMs), 0.5),
     ttftP95: percentile(runs.map((run) => run.ttftMs), 0.95),
     e2eMedian: percentile(runs.map((run) => run.endToEndLatencyMs), 0.5),
     e2eP95: percentile(runs.map((run) => run.endToEndLatencyMs), 0.95),
-    tpsMedian: percentile(runs.map((run) => run.tokensPerSecond), 0.5),
-    tpsP95: percentile(runs.map((run) => run.tokensPerSecond), 0.95),
+    tpsMin: tokensPerSecond.length > 0 ? Math.min(...tokensPerSecond) : null,
+    tpsMedian: percentile(tokensPerSecond, 0.5),
+    tpsMax: tokensPerSecond.length > 0 ? Math.max(...tokensPerSecond) : null,
   };
+}
+
+function buildRunThroughputSeries(runs) {
+  return runs
+    .filter((run) => Number.isFinite(run.index) && Number.isFinite(run.tokensPerSecond))
+    .map((run) => ({
+      runNumber: run.index,
+      tokensPerSecond: run.tokensPerSecond,
+    }))
+    .sort((left, right) => left.runNumber - right.runNumber);
+}
+
+function calculateCostPerCorrect(cost, correctCount) {
+  return cost === null || cost === undefined || correctCount <= 0
+    ? null
+    : cost / correctCount;
+}
+
+function calculateAggregateCostPerCorrect(usage, correctCount) {
+  if (usage.hasUnpriced || usage.pricedUsageCount <= 0) return null;
+  return calculateCostPerCorrect(usage.cost, correctCount);
+}
+
+function deriveBenchmarkRunStatus(results, { wasAborted = false, orchestrationFailed = false } = {}) {
+  if (wasAborted) return "cancelled";
+  if (orchestrationFailed || !Array.isArray(results) || results.length === 0) return "error";
+  if (results.every((result) => result.status === "complete")) return "complete";
+  return results.some((result) => result.runs.length > 0) ? "partial" : "error";
+}
+
+function summarizeThinkingAccuracy(result) {
+  const runs = Array.isArray(result?.runs) ? result.runs : [];
+  const measuredFailures = Array.isArray(result?.errors)
+    ? result.errors.filter((error) => Number.isInteger(error?.run) && error.run > 0).length
+    : 0;
+  const total = runs.length + measuredFailures;
+  const correct = runs.filter((run) => run.correct).length;
+  const compliant = runs.filter((run) => run.formatCompliant).length;
+  return {
+    correct,
+    compliant,
+    total,
+    successful: runs.length,
+    failed: measuredFailures,
+    accuracy: total > 0 ? correct / total : null,
+    formatCompliance: total > 0 ? compliant / total : null,
+  };
+}
+
+function summarizeRunThinkingAccuracy(results) {
+  return results.reduce((total, result) => {
+    const accuracy = summarizeThinkingAccuracy(result);
+    total.correct += accuracy.correct;
+    total.compliant += accuracy.compliant;
+    total.total += accuracy.total;
+    total.successful += accuracy.successful;
+    total.failed += accuracy.failed;
+    return total;
+  }, { correct: 0, compliant: 0, total: 0, successful: 0, failed: 0 });
 }
 
 function summarizeBenchmarkUsage(result) {
@@ -214,6 +292,86 @@ function formatInteger(value) {
   return Math.round(value).toLocaleString();
 }
 
+function formatTokenUsageBreakdown(usage) {
+  if (!usage || usage.requestCount === 0) return "-";
+  return `${formatInteger(usage.totalTokens)} (${formatInteger(usage.promptTokens)} in + ${formatInteger(usage.completionTokens)} out)${usage.hasEstimated ? " *" : ""}`;
+}
+
+function formatBenchmarkErrorTooltip(result, maxLength = 160) {
+  const errors = Array.isArray(result?.errors) ? result.errors : [];
+  if (errors.length === 0) return "";
+  const latest = errors[errors.length - 1];
+  const scope = latest?.run === "warmup"
+    ? "Warm-up"
+    : Number.isFinite(latest?.run) ? `Run ${latest.run}` : "Error";
+  const message = String(latest?.message || "Benchmark request failed.")
+    .replace(/\s+/g, " ")
+    .trim();
+  const summary = `${scope}: ${message}`;
+  const shortened = summary.length > maxLength
+    ? `${summary.slice(0, Math.max(1, maxLength - 1)).trimEnd()}…`
+    : summary;
+  const errorCount = errors.length > 1 ? ` (${errors.length} errors total)` : "";
+  return `${shortened}${errorCount}\nCheck console for details.`;
+}
+
+function getBenchmarkErrorTooltipElement() {
+  let tooltip = document.querySelector("#benchmark-error-tooltip");
+  if (tooltip) return tooltip;
+  tooltip = document.createElement("div");
+  tooltip.id = "benchmark-error-tooltip";
+  tooltip.className = "benchmark-error-tooltip";
+  tooltip.setAttribute("role", "tooltip");
+  tooltip.hidden = true;
+  document.body.append(tooltip);
+  return tooltip;
+}
+
+function showBenchmarkErrorTooltip(anchor, message) {
+  const tooltip = getBenchmarkErrorTooltipElement();
+  tooltip.textContent = message;
+  tooltip.hidden = false;
+  const anchorRect = anchor.getBoundingClientRect();
+  const tooltipRect = tooltip.getBoundingClientRect();
+  const margin = 12;
+  const left = Math.min(
+    Math.max(margin, anchorRect.left),
+    Math.max(margin, window.innerWidth - tooltipRect.width - margin),
+  );
+  const below = anchorRect.bottom + 8;
+  const top = below + tooltipRect.height <= window.innerHeight - margin
+    ? below
+    : Math.max(margin, anchorRect.top - tooltipRect.height - 8);
+  tooltip.style.left = `${Math.round(left)}px`;
+  tooltip.style.top = `${Math.round(top)}px`;
+}
+
+function hideBenchmarkErrorTooltip() {
+  const tooltip = document.querySelector("#benchmark-error-tooltip");
+  if (tooltip) tooltip.hidden = true;
+}
+
+function renderBenchmarkStatusCell(cell, statusText, statusClass, result) {
+  const pill = document.createElement("span");
+  pill.className = `status-pill ${statusClass}`.trim();
+  pill.textContent = statusText;
+  cell.append(pill);
+
+  const tooltip = formatBenchmarkErrorTooltip(result);
+  if (!tooltip) return;
+  cell.classList.add("status-has-error");
+  const indicator = document.createElement("span");
+  indicator.className = "status-error-indicator";
+  indicator.textContent = "ⓘ";
+  indicator.tabIndex = 0;
+  indicator.setAttribute("aria-label", tooltip);
+  cell.append(indicator);
+  cell.addEventListener("mouseenter", () => showBenchmarkErrorTooltip(cell, tooltip));
+  cell.addEventListener("mouseleave", hideBenchmarkErrorTooltip);
+  cell.addEventListener("focusin", () => showBenchmarkErrorTooltip(cell, tooltip));
+  cell.addEventListener("focusout", hideBenchmarkErrorTooltip);
+}
+
 function formatCost(value) {
   if (value === null || value === undefined) return "-";
   if (value > 0 && value < 0.000001) return "<$0.000001";
@@ -268,6 +426,13 @@ function getVisibleExportColumns(headers, visibleColumns, columnAttr) {
     }));
 }
 
+function getVisibleColumnDefinitions(columns, visibleColumns, excludedKeys = []) {
+  const excluded = new Set(excludedKeys);
+  return columns.filter((column) => (
+    visibleColumns.has(column.key) && !excluded.has(column.key)
+  ));
+}
+
 function exportBenchmarkCsvFile({ filenamePrefix, columns, results, getValue, getTotal }) {
   const header = columns.map((column) => column.label);
   const rows = results.map((result) => columns.map((column) => getValue(result, column.key)));
@@ -305,7 +470,7 @@ function exportBenchmarkJsonFile({
 }
 
 // --- Shared benchmark infrastructure (column picker, sort state, run sequence) ---
-// Used by both Raw Speed Test 1 and Thinking Test 1 to keep column-management,
+// Used by both Speed Test 1 and Thinking Test 1 to keep column-management,
 // warmup/measured-loop, and SSE parsing logic in one place instead of duplicated
 // across the two benchmark files. Each helper is intentionally idempotent and
 // pure of test-specific state so the test files can call them with their own
@@ -332,21 +497,25 @@ function saveVisibleColumnSet(storageKey, visibleColumns) {
   }
 }
 
-// Builds the visible-columns checkbox dropdown inside `container`. Each checkbox
-// corresponds to a column key from `headers` (via their data-${columnAttr} attribute)
-// and toggles membership in `visibleColumns` (a Set). `onChange(visibleColumns)`
-// runs after each successful toggle - the place to fix sort state, save, and
-// re-render. Mutates the existing Set instance so closures elsewhere keep working.
+// Builds the visible-columns checkbox dropdown inside `container` from either
+// existing table headers or `{ key, label }` column definitions. Each checkbox
+// toggles membership in `visibleColumns` (a Set). `onChange(visibleColumns)` runs
+// after each successful toggle so callers can fix sort state, save, and re-render.
+// Mutates the existing Set instance so closures elsewhere keep working.
 function buildColumnPicker({
-  headers,
+  headers = null,
+  columns = null,
   columnAttr,
   container,
   visibleColumns,
   onChange,
 }) {
   container.replaceChildren();
-  headers.forEach((header) => {
-    const key = header.dataset[columnAttr];
+  const columnEntries = columns ?? headers.map((header) => ({
+    key: header.dataset[columnAttr],
+    label: header.querySelector("button span").textContent,
+  }));
+  columnEntries.forEach(({ key, label: columnLabel }) => {
     const label = document.createElement("label");
     label.className = "column-option";
     const checkbox = document.createElement("input");
@@ -354,7 +523,7 @@ function buildColumnPicker({
     checkbox.value = key;
     checkbox.checked = visibleColumns.has(key);
     const text = document.createElement("span");
-    text.textContent = header.querySelector("button span").textContent;
+    text.textContent = columnLabel;
     checkbox.addEventListener("change", () => {
       if (checkbox.checked) {
         visibleColumns.add(key);
@@ -377,14 +546,11 @@ function syncColumnPicker(container, visibleColumns) {
   });
 }
 
-// Refreshes hidden / aria-sort / sort-icon state on the visible column headers.
-// Pass the per-test headers array, the data-attribute name carried on each header
-// (e.g. "benchmarkColumn" or "thinkingColumn"), the visible-columns Set, and the
-// active sort state { key, direction }.
-function updateSortHeaders({ headers, columnAttr, visibleColumns, sortState }) {
+// Refreshes hidden / aria-sort / sort-icon state on sortable column headers.
+function updateSortHeaders({ headers, columnAttr, visibleColumns = null, sortState }) {
   headers.forEach((header) => {
     const key = header.dataset[columnAttr];
-    header.hidden = !visibleColumns.has(key);
+    header.hidden = visibleColumns ? !visibleColumns.has(key) : false;
     const isActive = key === sortState.key;
     header.classList.toggle("sorted-column", isActive);
     header.setAttribute("aria-sort", isActive ? sortState.direction : "none");
@@ -419,6 +585,96 @@ function sortRowsByState(rows, getSortValue, sortState) {
   });
 }
 
+// Shared sortable-table controller. Every table uses the same header markup,
+// direction toggling, active-column styling, and missing-value sort behavior.
+// Existing headers can be bound with bindHeaders(); dynamic tables can build
+// their headers from a column definition array with renderHeaders().
+function createTableSorter({ initialKey, initialDirection = "ascending", onSort }) {
+  let sortState = { key: initialKey, direction: initialDirection };
+  let headerConfig = null;
+  const boundHeaders = new WeakSet();
+
+  function setState(nextState) {
+    sortState = {
+      key: nextState.key,
+      direction: nextState.direction === "descending" ? "descending" : "ascending",
+    };
+    if (headerConfig) updateSortHeaders({ ...headerConfig, sortState });
+  }
+
+  function sortBy(key) {
+    sortState = nextSortState(sortState, key);
+    if (headerConfig) updateSortHeaders({ ...headerConfig, sortState });
+    onSort?.(sortState);
+  }
+
+  function updateHeaders(config) {
+    updateSortHeaders({ ...config, sortState });
+  }
+
+  function bindHeaders(config) {
+    headerConfig = config;
+    config.headers.forEach((header) => {
+      if (boundHeaders.has(header)) return;
+      const button = header.querySelector(".sort-button");
+      if (!button) return;
+      button.addEventListener("click", () => sortBy(header.dataset[config.columnAttr]));
+      boundHeaders.add(header);
+    });
+    updateHeaders(config);
+  }
+
+  function renderHeaders({
+    container,
+    columns,
+    columnAttr = "sortColumn",
+    visibleColumns = null,
+  }) {
+    const row = document.createElement("tr");
+    const headers = columns.map(({ key, label, title }) => {
+      const header = document.createElement("th");
+      header.scope = "col";
+      header.dataset[columnAttr] = key;
+      if (title) header.title = title;
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "sort-button";
+      const labelElement = document.createElement("span");
+      labelElement.textContent = label;
+      const icon = document.createElement("span");
+      icon.className = "sort-icon";
+      icon.setAttribute("aria-hidden", "true");
+      button.append(labelElement, icon);
+      header.append(button);
+      row.append(header);
+      return header;
+    });
+    container.replaceChildren(row);
+    bindHeaders({ headers, columnAttr, visibleColumns });
+    return headers;
+  }
+
+  return {
+    get state() {
+      return { ...sortState };
+    },
+    bindHeaders,
+    markCell(cell, key) {
+      cell.classList.toggle("sorted-column", sortState.key === key);
+    },
+    renderHeaders,
+    reset(nextState) {
+      setState(nextState);
+    },
+    sortBy,
+    sortRows(rows, getSortValue) {
+      return sortRowsByState(rows, getSortValue, sortState);
+    },
+    updateHeaders,
+  };
+}
+
 // Live (in-progress) test-time display for a still-running result row: returns
 // elapsed ms since result.startedAtMs when the row is queued/warming/running,
 // otherwise null so callers fall back to result.totalTestTimeMs.
@@ -428,6 +684,16 @@ function getLiveElapsedMs(result, statusRegex = /^run \d+\/\d+$/i) {
     return performance.now() - result.startedAtMs;
   }
   return null;
+}
+
+function renderBenchmarkSafely(render, context = "benchmark") {
+  try {
+    render();
+    return true;
+  } catch (error) {
+    console.error(`[LLM Quick Bench] ${context} rendering failed.`, error);
+    return false;
+  }
 }
 
 function logBenchmarkEvent(config, logName, event, details) {
@@ -469,6 +735,7 @@ async function runStreamingChatCompletion({
   connection,
   body,
   logName,
+  captureExchange = false,
 }) {
   const requestController = new AbortController();
   const abortFromOuter = () => requestController.abort(outerSignal.reason);
@@ -486,8 +753,13 @@ async function runStreamingChatCompletion({
 
   try {
     const requestUrl = buildChatCompletionsUrl(connection.endpoint);
-    const rawRequestText = formatBenchmarkRequest(requestUrl, body);
-    logBenchmarkRaw(config, logName, `${modelId} · ${runLabel} · RAW REQUEST`, rawRequestText);
+    const shouldBuildDiagnosticText = captureExchange || config.logToConsole;
+    const rawRequestText = shouldBuildDiagnosticText
+      ? formatBenchmarkRequest(requestUrl, body)
+      : null;
+    if (rawRequestText !== null) {
+      logBenchmarkRaw(config, logName, `${modelId} · ${runLabel} · RAW REQUEST`, rawRequestText);
+    }
 
     const response = await fetch(requestUrl, {
       method: "POST",
@@ -499,14 +771,18 @@ async function runStreamingChatCompletion({
       signal: requestController.signal,
     });
 
-    const responseHeaderLines = [`HTTP ${response.status} ${response.statusText}`.trim()];
-    response.headers.forEach((value, key) => responseHeaderLines.push(`${key}: ${value}`));
-    logBenchmarkRaw(
-      config,
-      logName,
-      `${modelId} · ${runLabel} · RAW RESPONSE HEADERS`,
-      responseHeaderLines.join("\n"),
-    );
+    const responseHeaderLines = shouldBuildDiagnosticText
+      ? [`HTTP ${response.status} ${response.statusText}`.trim()]
+      : [];
+    if (shouldBuildDiagnosticText) {
+      response.headers.forEach((value, key) => responseHeaderLines.push(`${key}: ${value}`));
+      logBenchmarkRaw(
+        config,
+        logName,
+        `${modelId} · ${runLabel} · RAW RESPONSE HEADERS`,
+        responseHeaderLines.join("\n"),
+      );
+    }
 
     if (!response.ok) {
       const rawErrorBody = await response.text();
@@ -543,7 +819,8 @@ async function runStreamingChatCompletion({
       if (chunkData.promptTokens !== null) promptTokens = chunkData.promptTokens;
       if (chunkData.finishReason) finishReason = chunkData.finishReason;
       if (chunkData.contentDelta || chunkData.reasoningDelta) {
-        if (firstTokenAt === null) firstTokenAt = performance.now();
+        const receivedAt = performance.now();
+        if (firstTokenAt === null) firstTokenAt = receivedAt;
         contentText += chunkData.contentDelta;
         reasoningText += chunkData.reasoningDelta;
         outputText += chunkData.reasoningDelta + chunkData.contentDelta;
@@ -555,7 +832,7 @@ async function runStreamingChatCompletion({
       const rawResponseChunk = decoder.decode(value || new Uint8Array(), { stream: !done });
       if (rawResponseChunk) {
         rawChunkNumber += 1;
-        rawResponseChunks.push(rawResponseChunk);
+        if (captureExchange) rawResponseChunks.push(rawResponseChunk);
         logBenchmarkRaw(
           config,
           logName,
@@ -571,13 +848,17 @@ async function runStreamingChatCompletion({
     }
     if (buffer) consumeLine(buffer);
 
-    const consolidatedOutput = formatAssembledOutput(reasoningText, contentText);
-    logBenchmarkRaw(
-      config,
-      logName,
-      `${modelId} · ${runLabel} · ASSEMBLED RESPONSE`,
-      consolidatedOutput,
-    );
+    const consolidatedOutput = shouldBuildDiagnosticText
+      ? formatAssembledOutput(reasoningText, contentText)
+      : null;
+    if (consolidatedOutput !== null) {
+      logBenchmarkRaw(
+        config,
+        logName,
+        `${modelId} · ${runLabel} · ASSEMBLED RESPONSE`,
+        consolidatedOutput,
+      );
+    }
 
     const finishedAt = performance.now();
     if (firstTokenAt === null) throw new Error("The stream completed without generated text.");
@@ -591,9 +872,11 @@ async function runStreamingChatCompletion({
     const generationSeconds = Math.max((finishedAt - firstTokenAt) / 1000, 0.001);
 
     return {
-      request: rawRequestText,
-      response: formatCapturedStreamResponse(responseHeaderLines, rawResponseChunks),
-      consolidatedOutput,
+      request: captureExchange ? rawRequestText : null,
+      response: captureExchange
+        ? formatCapturedStreamResponse(responseHeaderLines, rawResponseChunks)
+        : null,
+      consolidatedOutput: captureExchange ? consolidatedOutput : null,
       outputText,
       reasoningText,
       contentText,
@@ -642,14 +925,14 @@ async function runStreamingChatCompletion({
 async function runBenchmarkSequence(result, config, signal, runOnce, render) {
   if (signal.aborted) {
     result.status = "cancelled";
-    render();
+    renderBenchmarkSafely(render, `${result.modelId} cancelled state`);
     return;
   }
   const modelStartedAt = performance.now();
   result.startedAtMs = modelStartedAt;
   result.startedAt = new Date().toISOString();
   result.status = "warming";
-  render();
+  renderBenchmarkSafely(render, `${result.modelId} warm-up state`);
 
   let includeUsage = true;
   try {
@@ -661,39 +944,44 @@ async function runBenchmarkSequence(result, config, signal, runOnce, render) {
       result.warmup = await runOnce({ runIndex: -1, label: "warmup-fallback", includeUsage: false });
     }
 
-    for (let runIndex = 0; runIndex < config.runs; runIndex += 1) {
-      if (signal.aborted) break;
-      result.status = `run ${runIndex + 1}/${config.runs}`;
-      render();
-      try {
-        const measuredRun = await runOnce({ runIndex, label: `run-${runIndex + 1}`, includeUsage });
-        result.runs.push({ index: runIndex + 1, ...measuredRun });
-      } catch (error) {
-        if (signal.aborted) break;
-        console.error(
-          `[LLM Quick Bench] Benchmark run ${runIndex + 1} failed for ${result.modelId}.`,
-          error,
-        );
-        result.errors.push({ run: runIndex + 1, message: error.message });
-      }
-      render();
-    }
-
-    result.status = signal.aborted
-      ? "cancelled"
-      : result.runs.length > 0
-        ? result.errors.length > 0 ? "partial" : "complete"
-        : "error";
   } catch (error) {
     result.status = signal.aborted ? "cancelled" : "error";
     if (!signal.aborted) {
       console.error(`[LLM Quick Bench] Benchmark warm-up failed for ${result.modelId}.`, error);
       result.errors.push({ run: "warmup", message: error.message });
     }
+    result.finishedAt = new Date().toISOString();
+    result.totalTestTimeMs = performance.now() - modelStartedAt;
+    renderBenchmarkSafely(render, `${result.modelId} warm-up failure state`);
+    return;
   }
+
+  for (let runIndex = 0; runIndex < config.runs; runIndex += 1) {
+    if (signal.aborted) break;
+    result.status = `run ${runIndex + 1}/${config.runs}`;
+    renderBenchmarkSafely(render, `${result.modelId} run ${runIndex + 1} start`);
+    try {
+      const measuredRun = await runOnce({ runIndex, label: `run-${runIndex + 1}`, includeUsage });
+      result.runs.push({ index: runIndex + 1, ...measuredRun });
+    } catch (error) {
+      if (signal.aborted) break;
+      console.error(
+        `[LLM Quick Bench] Benchmark run ${runIndex + 1} failed for ${result.modelId}.`,
+        error,
+      );
+      result.errors.push({ run: runIndex + 1, message: error.message });
+    }
+    renderBenchmarkSafely(render, `${result.modelId} run ${runIndex + 1} result`);
+  }
+
+  result.status = signal.aborted
+    ? "cancelled"
+    : result.runs.length > 0
+      ? result.errors.length > 0 ? "partial" : "complete"
+      : "error";
   result.finishedAt = new Date().toISOString();
   result.totalTestTimeMs = performance.now() - modelStartedAt;
-  render();
+  renderBenchmarkSafely(render, `${result.modelId} final state`);
 }
 
 // Parses one raw SSE line. Returns the parsed chunk object for `data:` lines with
