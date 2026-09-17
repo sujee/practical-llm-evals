@@ -1,9 +1,19 @@
 {
   "provider": "Nebius Token Factory",
   "provider_url": "https://tokenfactory.nebius.com/",
-  "updated_at": "2026-09-11",
+  "updated_at": "2026-09-16",
   "comment": "Prices in USD per 1M tokens. Blended pricing = 0.75 x input + 0.25 x output (3:1 mix). param_count in billions. context_window_K in K tokens (1K = 1024 tokens).  Only showing latest models. AA Intelligence Index is measured on max/high reasoning. (higher is better).",
   "models": [
+    {
+      "model_id": "deepseek-ai/DeepSeek-V4.1-Flash",
+      "model_release_date": "2026-09-15",
+      "aa_intelligence_index": 40,
+      "param_count": 552,
+      "context_window_K": 1048,
+      "price_input_1m": 0.3,
+      "price_output_1m": 1.20,
+      "pricing_blended_1m": 0.525
+    },
     {
       "model_id": "zai-org/GLM-5.3",
       "model_release_date": "2026-09-11",

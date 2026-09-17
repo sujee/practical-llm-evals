@@ -1,5 +1,60 @@
 [
   {
+    "type": "image2text",
+    "name": "DeepSeek V4.1 Flash",
+    "created_at": 1789509523,
+    "status": "active",
+    "huggingface_url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash",
+    "description": "DeepSeek’s multimodal mixture-of-experts model for coding, reasoning, and tasks combining images and text.",
+    "vendor": "deepseek",
+    "tags": [],
+    "use_cases": [
+      "dedicated-endpoint",
+      "text",
+      "image",
+      "code",
+      "responses_api"
+    ],
+    "license": {
+      "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/df42c109f1defefcbfcedbe7d905718a12266e40/LICENSE",
+      "name": "MIT",
+      "type": ""
+    },
+    "size_b": 0,
+    "quality": 0,
+    "flavors": [
+      {
+        "model_id": "deepseek-ai/DeepSeek-V4.1-Flash",
+        "model_type": "image2text",
+        "model_name": "DeepSeek V4.1 Flash",
+        "model_description": "DeepSeek’s multimodal mixture-of-experts model for coding, reasoning, and tasks combining images and text.",
+        "label": "cheap",
+        "regions": [
+          {
+            "country_code": "US",
+            "name": "us-north1"
+          }
+        ],
+        "external_provider": false,
+        "tags": [],
+        "use_cases": [
+          "dedicated-endpoint",
+          "text",
+          "image",
+          "code",
+          "responses_api"
+        ],
+        "context_window_k": 1048,
+        "max_model_len": 1048000,
+        "tokens_per_second": 139,
+        "input_price_per_million_tokens": 0.3,
+        "output_price_per_million_tokens": 1.2,
+        "quantization": "fp8"
+      }
+    ],
+    "context_window_k": 1048
+  },
+  {
     "type": "text2text",
     "name": "DeepSeek-V4-Flash-0731",
     "created_at": "2026-07-31T00:00:00.000Z",
@@ -263,75 +318,6 @@
   },
   {
     "type": "text2text",
-    "name": "Llama-3.3-70B-Instruct",
-    "created_at": "2024-12-06T00:00:00.000Z",
-    "status": "active",
-    "logo_url": "",
-    "huggingface_url": "https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct",
-    "description": "Refined Llama instruct model with strong reasoning, chat quality, and broad benchmark performance.",
-    "vendor": "meta",
-    "tags": [
-      "128K context"
-    ],
-    "use_cases": [
-      "text",
-      "summarization",
-      "context_and_rag",
-      "code",
-      "function_calling",
-      "fine_tune",
-      "responses_api"
-    ],
-    "policy_url": "https://llama.meta.com/llama3_1/use-policy/",
-    "license": {
-      "url": "https://github.com/meta-llama/llama-models/blob/main/models/llama3_3/LICENSE",
-      "name": "Llama 3.3 License",
-      "type": ""
-    },
-    "size_b": 70.6,
-    "quality": 86,
-    "fine_tune": {
-      "model_id": "meta-llama/Llama-3.3-70B-Instruct"
-    },
-    "flavors": [
-      {
-        "model_id": "meta-llama/Llama-3.3-70B-Instruct",
-        "model_type": "text2text",
-        "model_name": "Llama-3.3-70B-Instruct",
-        "model_description": "Refined Llama instruct model with strong reasoning, chat quality, and broad benchmark performance.",
-        "label": "cheap",
-        "regions": [
-          {
-            "country_code": "FI",
-            "name": "eu-north1"
-          }
-        ],
-        "external_provider": false,
-        "tags": [
-          "128K context"
-        ],
-        "use_cases": [
-          "text",
-          "summarization",
-          "context_and_rag",
-          "code",
-          "function_calling",
-          "fine_tune",
-          "responses_api"
-        ],
-        "context_window_k": 128,
-        "max_model_len": 131072,
-        "tokens_per_second": 25,
-        "input_tps": 65.59,
-        "input_price_per_million_tokens": 0.13,
-        "output_price_per_million_tokens": 0.4,
-        "quantization": "fp8"
-      }
-    ],
-    "context_window_k": 128
-  },
-  {
-    "type": "text2text",
     "name": "MiniMax-M3",
     "created_at": 1785493267,
     "status": "active",
@@ -397,7 +383,7 @@
     "type": "image2text",
     "name": "Kimi-K2.6",
     "created_at": 1778544000,
-    "status": "error",
+    "status": "active",
     "huggingface_url": "https://huggingface.co/moonshotai/Kimi-K2.6",
     "description": "Kimi K2.6 is an open-source, native multimodal agentic model built through continual pretraining on approximately 15 trillion mixed visual and text tokens atop Kimi-K2-Base",
     "vendor": "moonshotai",
@@ -476,7 +462,8 @@
       "context_and_rag",
       "function_calling",
       "reasoning",
-      "summarization"
+      "summarization",
+      "responses_api"
     ],
     "license": {
       "url": "https://huggingface.co/moonshotai/Kimi-K2.7-Code/blob/main/LICENSE",
@@ -509,7 +496,8 @@
           "context_and_rag",
           "function_calling",
           "reasoning",
-          "summarization"
+          "summarization",
+          "responses_api"
         ],
         "context_window_k": 256,
         "max_model_len": 262144,
@@ -537,7 +525,8 @@
       "code",
       "function_calling",
       "reasoning",
-      "context_and_rag"
+      "context_and_rag",
+      "responses_api"
     ],
     "policy_url": "https://docs.tokenfactory.nebius.com/legal/acceptable-use-policy",
     "license": {
@@ -569,11 +558,12 @@
           "code",
           "function_calling",
           "reasoning",
-          "context_and_rag"
+          "context_and_rag",
+          "responses_api"
         ],
         "context_window_k": 1024,
         "max_model_len": 1024000,
-        "tokens_per_second": 73.21,
+        "tokens_per_second": 264.55,
         "input_price_per_million_tokens": 3,
         "output_price_per_million_tokens": 15,
         "quantization": "fp4"
@@ -730,7 +720,8 @@
       "code",
       "reasoning",
       "function_calling",
-      "complex_writing"
+      "complex_writing",
+      "responses_api"
     ],
     "policy_url": "https://llama.meta.com/llama3_1/use-policy/",
     "license": {
@@ -763,7 +754,8 @@
           "code",
           "reasoning",
           "function_calling",
-          "complex_writing"
+          "complex_writing",
+          "responses_api"
         ],
         "context_window_k": 256,
         "max_model_len": 262144,
@@ -779,7 +771,7 @@
     "type": "text2text",
     "name": "Nemotron-3-Ultra-550b-a55b",
     "created_at": 1780531200,
-    "status": "error",
+    "status": "active",
     "huggingface_url": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4",
     "description": "Nemotron 3 Ultra is a 550B hybrid MoE model from NVIDIA, optimized for the most demanding multi-agent AI and complex reasoning tasks.",
     "vendor": "nvidia",
@@ -1495,7 +1487,7 @@
   {
     "type": "image2text",
     "name": "GLM-5.3-Flash",
-    "created_at": 1787872621,
+    "created_at": 1789524983,
     "status": "active",
     "huggingface_url": "https://huggingface.co/zai-org/GLM-5.3-Flash",
     "description": "Z.ai's 320B-parameter, 18B-active mixture-of-experts model for coding, agentic workflows, reasoning, tool use, and long-context tasks.",
@@ -1528,7 +1520,7 @@
         "regions": [
           {
             "country_code": "US",
-            "name": "us-central1"
+            "name": "us-north1"
           }
         ],
         "external_provider": false,
@@ -1548,7 +1540,7 @@
         "tokens_per_second": 349,
         "input_price_per_million_tokens": 0.15,
         "output_price_per_million_tokens": 0.5,
-        "quantization": "fp8"
+        "quantization": "fp4"
       }
     ],
     "context_window_k": 1024
