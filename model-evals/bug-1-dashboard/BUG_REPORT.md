@@ -5,8 +5,8 @@
 
 ## Actual
 
-- Revenue card: $149,000
-- Completed transaction table total: $131,000
+- Revenue card: $120,000
+- Completed transaction table total: $100,000
 
 ## Expected
 

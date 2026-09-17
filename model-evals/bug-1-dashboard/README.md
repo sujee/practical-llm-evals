@@ -14,11 +14,9 @@ Customer Success reported that the **Revenue** card does not match the total of 
 
 For the currently seeded data the dashboard currently shows:
 
-- Revenue summary: **$149,000**
-- Revenue transaction count: **6**
-- Completed transaction table total: **$131,000**
-- Completed transactions in table: **4**
-- Difference: **$18,000**
+- Revenue summary: **$120,000**
+- Completed transaction table total: **$100,000**
+- Difference: **$20,000**
 
 ## Business rule
 
@@ -45,10 +43,17 @@ Do not modify the seed data just to make the totals agree.
 ### Prompt 2 (for text only models)
 
 ```
-Revenue card says $149,000
-But Completed transaction table total is $131,000
+Revenue card says $120,000
+But Completed transaction table total is $100,000
 
 Investigate the issue in this repository. Reproduce it, identify the root cause, implement the smallest correct fix, add a regression test, run the test suite, and explain what changed.
 
 Do not modify the seed data just to make the totals agree.
 ```
+
+## Verify the fix
+
+Restart the app and check the summary.  
+It should be $100,000
+
+Also do `git status` and `git diff`  to see new  tests added.

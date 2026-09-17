@@ -16,28 +16,21 @@
   {
     "id": "txn_1003",
     "customer": "Pinecone Systems",
-    "amount_cents": 4800000,
+    "amount_cents": 4500000,
     "status": "completed",
     "created_at": "2026-09-15T15:30:00Z"
   },
   {
     "id": "txn_1004",
     "customer": "Vector Forge",
-    "amount_cents": 5400000,
+    "amount_cents": 3500000,
     "status": "completed",
     "created_at": "2026-09-15T18:10:00Z"
   },
   {
     "id": "txn_1005",
-    "customer": "Orbit Works",
-    "amount_cents": 900000,
-    "status": "completed",
-    "created_at": "2026-09-16T12:00:00Z"
-  },
-  {
-    "id": "txn_1006",
     "customer": "Helix Dynamics",
-    "amount_cents": 1300000,
+    "amount_cents": 1500000,
     "status": "pending",
     "created_at": "2026-09-15T20:45:00Z"
   }
