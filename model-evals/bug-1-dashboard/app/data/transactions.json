@@ -1,0 +1,44 @@
+[
+  {
+    "id": "txn_1001",
+    "customer": "Northstar Labs",
+    "amount_cents": 500000,
+    "status": "refunded",
+    "created_at": "2026-09-15T09:20:00Z"
+  },
+  {
+    "id": "txn_1002",
+    "customer": "Atlas Robotics",
+    "amount_cents": 2000000,
+    "status": "completed",
+    "created_at": "2026-09-15T10:15:00Z"
+  },
+  {
+    "id": "txn_1003",
+    "customer": "Pinecone Systems",
+    "amount_cents": 4800000,
+    "status": "completed",
+    "created_at": "2026-09-15T15:30:00Z"
+  },
+  {
+    "id": "txn_1004",
+    "customer": "Vector Forge",
+    "amount_cents": 5400000,
+    "status": "completed",
+    "created_at": "2026-09-15T18:10:00Z"
+  },
+  {
+    "id": "txn_1005",
+    "customer": "Orbit Works",
+    "amount_cents": 900000,
+    "status": "completed",
+    "created_at": "2026-09-16T12:00:00Z"
+  },
+  {
+    "id": "txn_1006",
+    "customer": "Helix Dynamics",
+    "amount_cents": 1300000,
+    "status": "pending",
+    "created_at": "2026-09-15T20:45:00Z"
+  }
+]

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Acme Revenue Dashboard</title>
+  <link rel="stylesheet" href="/static/styles.css?v=3" />
+</head>
+<body>
+  <main class="page">
+    <header>
+      <div>
+        <p class="eyebrow">ACME ANALYTICS</p>
+        <h1>Revenue dashboard</h1>
+      </div>
+    </header>
+
+    <section class="cards">
+      <article class="card">
+        <span>Revenue (completed)</span>
+        <strong id="revenue">-</strong>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Transactions</h2>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>ID</th>
+            <th>Customer</th>
+            <th>Status</th>
+            <th class="money">Amount</th>
+          </tr>
+        </thead>
+        <tbody id="transactions"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="/static/app.js?v=11"></script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #172033;
+  background: #f4f7fb;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+.page { max-width: 1120px; margin: 0 auto; padding: 48px 28px 72px; }
+header { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 28px; }
+.eyebrow { margin: 0 0 6px; font-size: 12px; font-weight: 800; letter-spacing: .13em; color: #65718a; }
+h1 { margin: 0; font-size: 38px; letter-spacing: -.03em; }
+.subtitle { margin: 7px 0 0; color: #6c778e; }
+.controls { display: grid; gap: 7px; font-size: 13px; color: #65718a; }
+.controls input { border: 1px solid #d6ddeb; border-radius: 10px; padding: 10px 12px; background: white; }
+.cards { display: flex; justify-content: flex-end; gap: 16px; margin-bottom: 18px; }
+.card, .panel { background: white; border: 1px solid #e3e8f1; border-radius: 16px; box-shadow: 0 8px 25px rgba(23, 32, 51, .05); }
+.card { padding: 20px; }
+.card span { display: block; color: #6c778e; font-size: 13px; font-weight: 700; }
+.card strong { display: block; margin: 8px 0 4px; font-size: 31px; letter-spacing: -.03em; }
+.card small { color: #8b95a8; }
+.warning-card { border-color: #f0d4a8; }
+.panel { overflow: hidden; }
+.panel-heading { display: flex; justify-content: space-between; align-items: center; padding: 22px 24px; border-bottom: 1px solid #e8edf5; }
+.panel-heading h2 { margin: 0; font-size: 20px; }
+.panel-heading p { margin: 5px 0 0; color: #7b869a; font-size: 13px; }
+.status { border-radius: 999px; padding: 7px 10px; font-size: 12px; font-weight: 800; background: #eef1f6; color: #6b7588; }
+.status.bad { background: #fff0ef; color: #b43f36; }
+.status.ok { background: #edf8f1; color: #287a49; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 15px 24px; border-bottom: 1px solid #edf1f6; text-align: left; font-size: 14px; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #7d889b; background: #fbfcfe; }
+tfoot td { font-weight: 800; background: #fbfcfe; border-bottom: 0; }
+.money { text-align: right; font-variant-numeric: tabular-nums; }
+code { font-size: 12px; color: #4b5870; }
+@media (max-width: 760px) {
+  header { align-items: stretch; flex-direction: column; }
+  .cards { flex-direction: column; align-items: stretch; }
+  .page { padding: 28px 14px; }
+  th, td { padding: 12px; }
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: #eef7ef;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
