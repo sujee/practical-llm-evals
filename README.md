@@ -11,6 +11,10 @@ Use these browser-based tools to compare endpoint speed, model quality, pricing,
 | ⚡ [**Quick LLM Bench**](./llm-quick-bench/README.md) | Measures streaming performance and reasoning quality across LLM endpoints, including time to first token, token throughput, end-to-end latency, accuracy, and cost. | [Try it live →](https://sujee.github.io/practical-llm-evals/llm-quick-bench/) |
 | 📊 [**Nebius Token Factory Model Visualizer**](./providers/nebius-token-factory/model-visualizer/README.md) | Explores model intelligence, pricing, release timelines, and context-window trends. | [Explore models →](https://sujee.github.io/practical-llm-evals/providers/nebius-token-factory/model-visualizer/) |
 
+## Developer utilities
+
+🧪 [Few testing utils](./utils/README.md) —  smoke-tests the Chat Completions and Responses APIs  and measures streaming throughput and more.
+
 ## Fun benchmarks and projects
 
 Playable games, simulations, demos, and 3D scenes created with AI coding agents and models.
