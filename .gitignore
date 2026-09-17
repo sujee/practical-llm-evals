@@ -14,6 +14,11 @@ tmp/
 # Ignore empty OpenAI tooling stub directories
 .openai/
 
+# Ignore environment files (may contain API keys/secrets), keep example templates
+.env
+.env.*
+!.env.example
+
 ## Python
 .venv
 __pycache__

@@ -92,9 +92,6 @@
             <label for="provider">Provider</label>
             <select id="provider" name="provider">
               <option value="nebius" selected>Nebius Token Factory</option>
-              <option value="openai">OpenAI</option>
-              <option value="together">Together AI</option>
-              <option value="baseten">Baseten</option>
               <option value="custom">Custom OpenAI-compatible</option>
             </select>
             <p class="hint">Choose a preset or enter an OpenAI-compatible URL.</p>
@@ -318,6 +315,51 @@
           <p class="metric-note">One chart per model with one tok/s bar per run. A dashed p50 line summarizes the completed runs.</p>
           <div id="speed-graphs"></div>
         </section>
+
+        <details class="methodology-details" open>
+          <summary>Testing methodology</summary>
+          <div class="methodology">
+            <ul>
+              <li><strong>TTFT</strong> runs from request dispatch to the first non-empty content or reasoning delta.</li>
+              <li><strong>Tok/s</strong> divides completion tokens by elapsed streaming time after that first delta.</li>
+              <li><strong>Thinking tokens count.</strong> When a model emits reasoning content, those tokens are included in both tok/s and TTFT. Because the server only reports a combined completion-token total, the reasoning share is estimated from streamed characters and flagged when present.</li>
+              <li><strong>End-to-end latency</strong> runs from request dispatch until the response stream closes.</li>
+              <li>One warm-up request runs per model. It is excluded from throughput summaries but included in test time, token usage, and cost.</li>
+              <li>Total run time is wall-clock time; parallel model times are not summed.</li>
+              <li>Cost uses each model's displayed input and output price per million tokens; models without pricing remain unpriced.</li>
+              <li>Each model gets a throughput chart with one tok/s bar per measured run; a dashed p50 reference line summarizes the completed runs.</li>
+              <li>TTFT therefore represents short-prompt latency. Long-context prefill performance should be measured separately with controlled input sizes.</li>
+              <li>Models run in parallel; measured runs for a given model remain serial. Use concurrency 1 for an isolated latency baseline.</li>
+              <li>Model scheduling order is randomized and recorded in the export to reduce time-of-run bias.</li>
+              <li class="methodology-request-item">
+                <details class="methodology-request">
+                  <summary>Benchmark request</summary>
+                  <p class="sample-request-note">Live request template based on the current settings. The selected model is inserted when the test runs, and the API key is always redacted.</p>
+                  <pre class="sample-request"><code id="speed-request-template-code"></code></pre>
+                </details>
+              </li>
+              <li class="methodology-sample-item">
+                <details class="sample-exchange">
+                  <summary>Sample request</summary>
+                  <p id="speed-sample-request-note" class="sample-request-note">Captured from a completed measured run. The API key is redacted.</p>
+                  <pre class="sample-request"><code id="speed-sample-request-code"></code></pre>
+                </details>
+              </li>
+            </ul>
+            <div class="sample-exchanges">
+              <details class="sample-exchange">
+                <summary>Sample streaming response</summary>
+                <p id="speed-sample-response-note" class="sample-request-note">Raw response headers and every decoded network chunk from the same measured run. Chunk labels are added by the benchmark.</p>
+                <pre class="sample-request"><code id="speed-sample-response-code"></code></pre>
+              </details>
+              <details class="sample-exchange">
+                <summary>Sample consolidated response</summary>
+                <p id="speed-sample-output-note" class="sample-request-note">All generated deltas from the same measured run, consolidated in arrival order.</p>
+                <pre class="sample-request"><code id="speed-sample-output-code"></code></pre>
+              </details>
+            </div>
+          </div>
+        </details>
       </section>
       </div>
 

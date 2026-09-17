@@ -161,6 +161,7 @@ thinkingForm.addEventListener("submit", async (event) => {
   setThinkingRunning(true);
   thinkingResults.hidden = false;
   renderBenchmarkSafely(renderThinkingResults, "Thinking Test 1 initial state");
+  scrollToBenchmarkResults(thinkingResults);
   setThinkingStatus(`Running ${selectedModels.length} models with up to ${Math.min(config.concurrency, selectedModels.length)} in parallel…`);
 
   let orchestrationFailed = false;

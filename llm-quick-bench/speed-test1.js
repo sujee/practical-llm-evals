@@ -55,18 +55,6 @@ const endpointPresets = {
     endpoint: "https://api.tokenfactory.nebius.com/v1",
     hint: "Nebius OpenAI-compatible API base URL.",
   },
-  openai: {
-    endpoint: "https://api.openai.com/v1",
-    hint: "OpenAI API base URL.",
-  },
-  together: {
-    endpoint: "https://api.together.ai/v1",
-    hint: "Together AI OpenAI-compatible API base URL.",
-  },
-  baseten: {
-    endpoint: "https://inference.baseten.co/v1",
-    hint: "Baseten OpenAI-compatible inference API base URL.",
-  },
 };
 
 const columns = [
@@ -844,6 +832,13 @@ const speedColumnOptions = document.querySelector("#speed-column-options");
 const showAllSpeedColumnsButton = document.querySelector("#show-all-speed-columns");
 const exportSpeedCsvButton = document.querySelector("#export-speed-csv");
 const exportSpeedJsonButton = document.querySelector("#export-speed-json");
+const speedTemplateCode = document.querySelector("#speed-request-template-code");
+const speedSampleRequestNote = document.querySelector("#speed-sample-request-note");
+const speedSampleRequestCode = document.querySelector("#speed-sample-request-code");
+const speedSampleResponseNote = document.querySelector("#speed-sample-response-note");
+const speedSampleResponseCode = document.querySelector("#speed-sample-response-code");
+const speedSampleOutputNote = document.querySelector("#speed-sample-output-note");
+const speedSampleOutputCode = document.querySelector("#speed-sample-output-code");
 
 const speedColumns = [
   { key: "modelId", label: "Model" },
@@ -880,6 +875,7 @@ let speedRun = null;
 let speedAbortController = null;
 let speedStartedAtMs = null;
 let speedStopClock = null;
+let speedSampleCapturePending = false;
 const speedTableSorter = createTableSorter({
   initialKey: "tpsMedian",
   initialDirection: "descending",
@@ -903,6 +899,14 @@ document.addEventListener("models:selection-changed", updateSpeedRunButtonState)
 document.addEventListener("models:selection-changed", () => {
   if (speedAbortController == null) renderSpeedGraphs();
 });
+[speedPromptInput, speedMaxTokensInput].forEach((input) => {
+  input.addEventListener("input", renderSpeedRequestTemplate);
+});
+[speedDisableThinkingInput, speedFixedOutputInput].forEach((input) => {
+  input.addEventListener("change", renderSpeedRequestTemplate);
+});
+providerSelect.addEventListener("change", renderSpeedRequestTemplate);
+endpointInput.addEventListener("input", renderSpeedRequestTemplate);
 
 speedForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -963,6 +967,8 @@ speedForm.addEventListener("submit", async (event) => {
   setSpeedRunning(true);
   speedResults.hidden = false;
   renderBenchmarkSafely(renderSpeedResults, "Speed Test 1 initial state");
+  renderBenchmarkSafely(renderSpeedMethodologySample, "Speed Test 1 sample exchange reset");
+  scrollToBenchmarkResults(speedResults);
   setSpeedStatus(`Running ${selectedModels.length} models with up to ${Math.min(config.concurrency, selectedModels.length)} in parallel… Scroll below to see per-run throughput.`);
 
   let orchestrationFailed = false;
@@ -1053,21 +1059,64 @@ async function benchmarkSpeedModel(result, config, signal, connection) {
 }
 
 async function runSpeedCompletion(modelId, config, outerSignal, includeUsage, runLabel, connection) {
-  const stream = await runStreamingChatCompletion({
-    modelId,
-    config,
-    outerSignal,
-    runLabel,
-    connection,
-    body: buildBenchmarkRequestBody(modelId, config, includeUsage, connection.provider),
-    logName: "Speed Test 1",
-  });
+  const captureExchange = runLabel.startsWith("run-")
+    && speedRun != null
+    && speedRun.sampleExchange == null
+    && !speedSampleCapturePending;
+  if (captureExchange) speedSampleCapturePending = true;
+  let stream;
+  try {
+    stream = await runStreamingChatCompletion({
+      modelId,
+      config,
+      outerSignal,
+      runLabel,
+      connection,
+      body: buildBenchmarkRequestBody(modelId, config, includeUsage, connection.provider),
+      logName: "Speed Test 1",
+      captureExchange,
+    });
+  } catch (error) {
+    if (captureExchange) speedSampleCapturePending = false;
+    throw error;
+  }
+  if (captureExchange && speedRun && !speedRun.sampleExchange) {
+    speedRun.sampleExchange = {
+      modelId,
+      runLabel,
+      capturedAt: new Date().toISOString(),
+      request: stream.request,
+      response: stream.response,
+      consolidatedOutput: stream.consolidatedOutput,
+    };
+    speedSampleCapturePending = false;
+    renderBenchmarkSafely(renderSpeedMethodologySample, "Speed Test 1 sample exchange");
+  }
+  if (captureExchange) speedSampleCapturePending = false;
+
+  const reasoningTokens = stream.measurement.completionTokens > 0 && stream.outputText.length > 0
+    ? Math.round(
+      (stream.reasoningText.length / stream.outputText.length) * stream.measurement.completionTokens,
+    )
+    : 0;
+  const answerTokens = stream.measurement.completionTokens - reasoningTokens;
+  const measurement = {
+    ...stream.measurement,
+    reasoningTokens,
+    answerTokens,
+  };
+  if (reasoningTokens > 0) {
+    console.warn(
+      `[Speed Test 1] ${modelId} · ${runLabel} emitted reasoning content (~${reasoningTokens} tokens); tok/s and TTFT include it.`,
+    );
+  }
+
   logBenchmarkEvent(config, "Speed Test 1", "completion summary", {
     model: modelId,
     run: runLabel,
-    measurement: stream.measurement,
+    measurement,
   });
-  return stream.measurement;
+  return measurement;
 }
 
 function renderSpeedResults() {
@@ -1159,6 +1208,13 @@ function renderSpeedTable(runUsage) {
   ];
   if (runUsage.hasEstimated) notes.push("* Some token counts are estimated because the endpoint omitted streaming usage.");
   if (runUsage.hasUnpriced) notes.push("Some models lack pricing metadata and are excluded from the displayed cost subtotal.");
+  const reasoningRunCount = sortedResults.reduce(
+    (count, result) => count + result.runs.filter((run) => run.reasoningTokens > 0).length,
+    0,
+  );
+  if (reasoningRunCount > 0) {
+    notes.push(`Reasoning content was detected in ${reasoningRunCount} measured run${reasoningRunCount === 1 ? "" : "s"}; tok/s and TTFT include those thinking tokens.`);
+  }
   speedUsageNote.textContent = notes.join(" ");
 }
 
@@ -1196,6 +1252,51 @@ function showAllSpeedColumns() {
   saveVisibleColumnSet(speedColumnPreferenceKey, visibleSpeedColumns);
   syncColumnPicker(speedColumnOptions, visibleSpeedColumns);
   renderSpeedResults();
+}
+
+function renderSpeedRequestTemplate() {
+  const previewConfig = {
+    prompt: speedPromptInput.value.trim(),
+    maxTokens: clampInteger(speedMaxTokensInput.value, 32, 4096),
+    disableThinking: speedDisableThinkingInput.checked,
+    fixedOutput: speedFixedOutputInput.checked,
+  };
+  const endpointValue = endpointInput.value.trim() || "https://api.example.com/v1";
+  let requestUrl;
+  try {
+    requestUrl = buildChatCompletionsUrl(endpointValue);
+  } catch (error) {
+    console.warn("[LLM Quick Bench] Speed Test 1 request preview failed.", error);
+    speedTemplateCode.textContent = "Enter a valid API endpoint to preview the benchmark request.";
+    return;
+  }
+  const body = buildBenchmarkRequestBody(
+    "<selected-model>",
+    previewConfig,
+    true,
+    providerSelect.value,
+  );
+  speedTemplateCode.textContent = formatBenchmarkRequest(requestUrl, body);
+}
+
+function renderSpeedMethodologySample() {
+  const sample = speedRun?.sampleExchange;
+  if (!sample) {
+    speedSampleRequestNote.textContent = "No measured run has been captured yet.";
+    speedSampleResponseNote.textContent = "Run the test to capture an actual request and its complete streamed response.";
+    speedSampleOutputNote.textContent = "Run the test to assemble the generated output from an actual measured run.";
+    speedSampleRequestCode.textContent = "Run a test to capture an actual measured request.";
+    speedSampleResponseCode.textContent = "Run a test to capture its actual streamed response.";
+    speedSampleOutputCode.textContent = "Run a test to capture its consolidated output.";
+    return;
+  }
+  const source = `${sample.modelId} · ${sample.runLabel}`;
+  speedSampleRequestNote.textContent = `Actual request captured from ${source}. The API key is redacted.`;
+  speedSampleResponseNote.textContent = `Actual response captured from ${source}. Chunk labels show the decoded network reads.`;
+  speedSampleOutputNote.textContent = `Actual generated deltas from ${source}, consolidated in arrival order.`;
+  speedSampleRequestCode.textContent = sample.request;
+  speedSampleResponseCode.textContent = sample.response;
+  speedSampleOutputCode.textContent = sample.consolidatedOutput;
 }
 
 function exportSpeedCsv() {
@@ -1314,6 +1415,11 @@ function buildSpeedGraphPanel(modelId, runs) {
   const summary = summarizeRuns(runs);
   const series = buildRunThroughputSeries(runs);
   if (series.length === 0) return null;
+  const reasoningRuns = new Set(
+    runs
+      .filter((run) => Number.isFinite(run.index) && run.reasoningTokens > 0)
+      .map((run) => run.index),
+  );
 
   const panel = document.createElement("div");
   panel.className = "speed-graph-panel";
@@ -1325,20 +1431,22 @@ function buildSpeedGraphPanel(modelId, runs) {
   stat.textContent = `p50 ${summary.tpsMedian.toFixed(1)} tok/s · ${series.length} run${series.length === 1 ? "" : "s"}`;
   head.append(title, stat);
 
-  panel.append(head, buildThroughputChart(modelId, series, summary));
+  panel.append(head, buildThroughputChart(modelId, series, summary, reasoningRuns));
   return panel;
 }
 
-function buildThroughputChart(modelId, series, summary) {
+function buildThroughputChart(modelId, series, summary, reasoningRuns = new Set()) {
   const wrap = document.createElement("div");
   wrap.className = "speed-throughput-chart";
 
   const legend = document.createElement("div");
   legend.className = "speed-chart-legend";
-  [
+  const legendItems = [
     ["run tok/s", null, "throughput"],
     ["tok/sec median", summary.tpsMedian, "p50"],
-  ].forEach(([label, value, className]) => {
+  ];
+  if (reasoningRuns.size > 0) legendItems.push(["includes reasoning", null, "reasoning"]);
+  legendItems.forEach(([label, value, className]) => {
     const item = document.createElement("span");
     item.className = `speed-chart-legend-item ${className}`;
     item.textContent = value === null ? label : `${label} ${value.toFixed(1)} tok/s`;
@@ -1380,7 +1488,8 @@ function buildThroughputChart(modelId, series, summary) {
     const x = padLeft + index * band + (band - barWidth) / 2;
     const y = toY(point.tokensPerSecond);
     const barHeight = padTop + innerHeight - y;
-    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" class="sp-bar sp-bar-throughput" data-label="tok/s" data-value="${point.tokensPerSecond.toFixed(1)}" data-run="${point.runNumber}"></rect>`;
+    const reasoningClass = reasoningRuns.has(point.runNumber) ? " sp-bar-reasoning" : "";
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" class="sp-bar sp-bar-throughput${reasoningClass}" data-label="tok/s" data-value="${point.tokensPerSecond.toFixed(1)}" data-run="${point.runNumber}"></rect>`;
   });
 
   const refLines = [["p50", summary.tpsMedian]].map(([label, value]) => {
@@ -1415,7 +1524,8 @@ function buildThroughputChart(modelId, series, summary) {
     if (!bar) { tooltip.hidden = true; return; }
     const value = Number(bar.dataset.value);
     const formattedValue = Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1);
-    tooltip.textContent = `run ${bar.dataset.run}: ${formattedValue} tok/sec`;
+    const reasoningNote = bar.classList.contains("sp-bar-reasoning") ? " · includes reasoning" : "";
+    tooltip.textContent = `run ${bar.dataset.run}: ${formattedValue} tok/sec${reasoningNote}`;
     tooltip.hidden = false;
   });
   svg.addEventListener("mousemove", (event) => {
@@ -1429,6 +1539,7 @@ function buildThroughputChart(modelId, series, summary) {
 
 function resetSpeedResults() {
   speedRun = null;
+  speedSampleCapturePending = false;
   speedSummaryTime.textContent = "-";
   speedSummaryTotalTokens.textContent = "-";
   speedSummaryCost.textContent = "-";
@@ -1470,4 +1581,6 @@ function stopSpeedClock() {
 }
 
 resetSpeedResults();
+renderSpeedMethodologySample();
+renderSpeedRequestTemplate();
 updateSpeedRunButtonState();

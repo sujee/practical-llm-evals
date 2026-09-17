@@ -1680,6 +1680,11 @@ td:first-child {
   stroke: var(--chart-bar-border);
 }
 
+.sp-bar-reasoning {
+  fill: var(--warning);
+  stroke: var(--warning);
+}
+
 .sp-ref {
   stroke-width: 1.5;
 }
@@ -1721,6 +1726,11 @@ td:first-child {
 .speed-chart-legend-item.throughput::before {
   border: 1px solid var(--chart-bar-border);
   background: var(--chart-bar);
+}
+
+.speed-chart-legend-item.reasoning::before {
+  border: 1px solid var(--warning);
+  background: var(--warning);
 }
 
 .speed-chart-legend-item.p50::before {

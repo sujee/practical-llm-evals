@@ -696,6 +696,33 @@ function renderBenchmarkSafely(render, context = "benchmark") {
   }
 }
 
+// Smoothly brings a benchmark's results table into view when a run starts. The
+// scroll waits one frame so the freshly revealed results have laid out, eases
+// over a distance-scaled duration, and jumps instantly for reduced-motion users.
+function scrollToBenchmarkResults(element) {
+  if (!element) return;
+  requestAnimationFrame(() => {
+    const rect = element.getBoundingClientRect();
+    if (rect.height === 0) return;
+    const startY = window.scrollY;
+    const distance = rect.top;
+    const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReducedMotion || Math.abs(distance) < 4) {
+      window.scrollTo(0, startY + distance);
+      return;
+    }
+    const duration = Math.min(1400, Math.max(500, Math.abs(distance) * 0.9));
+    const startTime = performance.now();
+    const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2);
+    const step = (now) => {
+      const progress = Math.min((now - startTime) / duration, 1);
+      window.scrollTo(0, startY + distance * easeInOut(progress));
+      if (progress < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+}
+
 function logBenchmarkEvent(config, logName, event, details) {
   if (!config.logToConsole) return;
   let serializedDetails;

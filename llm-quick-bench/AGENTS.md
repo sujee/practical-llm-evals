@@ -20,6 +20,10 @@ Do not increment the version for ordinary commits. Increment it by exactly one o
 
 Never commit or push automatically. Always ask the user for explicit approval before each commit and before each push.
 
+- Get explicit permission for every commit, push, merge, or pull request; never perform one automatically.
+- Keep ordinary work commits on the working branch. Ordinary work commits do not change the version.
+- Publish only by merging the completed, tested work into the `main` worktree and pushing from there. Never push a feature or working branch in place of `main`.
+
 ## Publishing
 
 Publishing happens only from the `main` branch and its worktree.
