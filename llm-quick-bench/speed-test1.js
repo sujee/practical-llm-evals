@@ -361,10 +361,9 @@ function buildModelReference(entries) {
   entries.forEach((entry) => {
     const score = toNumber(entry.aa_intelligence_index);
     const paramCountBillions = toNumber(entry.param_count_B);
-    const contextWindow = toNumber(entry.context_window_tokens)
-      ?? (toNumber(entry.context_window_K) != null
-        ? toNumber(entry.context_window_K) * 1024
-        : null);
+    const contextWindow = toNumber(entry.context_window_K) != null
+      ? toNumber(entry.context_window_K) * 1024
+      : null;
     const reference = {
       aaIndex: score,
       paramCount: paramCountBillions === null ? null : paramCountBillions * 1_000_000_000,

@@ -20,20 +20,6 @@ It measures response speed, token throughput, latency, accuracy, token usage, an
 
 Enter your endpoint URL and API key, load the available models, select the models you want to compare, and run a benchmark.
 
-## Develop locally
+## Dev Notes
 
-
-```bash
-cd llm-quick-bench
-python3 -m http.server 8000
-```
-
-Then open [http://localhost:8000](http://localhost:8000).
-
-Your API key is used only for the current browser session and is not saved. Requests are sent directly from your browser to the selected endpoint.
-
-## Test
-
-```bash
-node --test tests/*.test.js
-```
+[dev-notes.md](dev-notes.md)
