@@ -1,0 +1,10 @@
+[project]
+name = "model-validation"
+version = "0.1.0"
+description = "Validate which Nebius Token Factory models support the Chat and Responses APIs."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=1.0.0",
+    "python-dotenv>=1.0.0",
+]

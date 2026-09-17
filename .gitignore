@@ -8,6 +8,12 @@ tmp/
 *.out
 *.zip
 
+# Ignore secrets
+.env
+.env.*
+!.env.example
+!.env.sample
+
 # Ignore macOS .DS_Store files
 .DS_Store
 
