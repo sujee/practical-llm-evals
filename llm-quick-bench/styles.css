@@ -593,6 +593,12 @@ code {
   gap: 9px;
 }
 
+/* Wrap instead of overflowing when a toolbar has a long note plus many controls. */
+.result-toolbar,
+.export-actions {
+  flex-wrap: wrap;
+}
+
 .model-selection-actions {
   flex-wrap: nowrap;
   margin: -6px 30px 18px;
@@ -1756,4 +1762,399 @@ td:first-child {
   white-space: nowrap;
   pointer-events: none;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+/* --- Decode Test (client-observed output generation speed) --- */
+
+.decode-table td.decode-empty-cell {
+  padding: 26px 16px;
+  color: var(--muted);
+  font-family: inherit;
+  font-weight: 500;
+  text-align: center;
+}
+
+.decode-table {
+  width: 100%;
+  min-width: 1260px;
+  table-layout: fixed;
+  border: 1px solid var(--control-border);
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface);
+  font-size: 0.78rem;
+}
+
+/* Headers are rendered as sort buttons, so the <th> keeps zero padding and the
+   button provides its own spacing. Header labels wrap; data cells stay on one line. */
+.decode-table th {
+  padding: 0;
+  white-space: normal;
+}
+
+.decode-table td {
+  padding: 11px 10px;
+  white-space: nowrap;
+}
+
+.decode-table td[data-decode-column="modelId"] {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.decode-table td[data-decode-column="reasoningStatus"] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.decode-table .sort-button {
+  position: relative;
+  min-height: 52px;
+  gap: 5px;
+  padding: 10px 24px 10px 12px;
+  font-size: 0.64rem;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.decode-table .sort-button > span:first-child {
+  min-width: 0;
+}
+
+.decode-table .sort-icon {
+  position: absolute;
+  top: 50%;
+  right: 9px;
+  transform: translateY(-50%);
+  transition: color 150ms ease, opacity 150ms ease;
+}
+
+.decode-table th[aria-sort="none"] .sort-icon {
+  opacity: 0;
+}
+
+.decode-table th[aria-sort="none"]:hover .sort-icon,
+.decode-table th[aria-sort="none"] .sort-button:focus-visible .sort-icon {
+  opacity: 1;
+}
+
+.decode-table th[data-decode-column="modelId"] { width: 15%; }
+.decode-table th[data-decode-column="length"] { width: 7%; }
+.decode-table th[data-decode-column="status"] { width: 11%; }
+.decode-table th[data-decode-column="decodeTpsP50"] { width: 10%; }
+.decode-table th[data-decode-column="ttftP50"] { width: 7%; }
+.decode-table th[data-decode-column="ttftP90"] { width: 7%; }
+.decode-table th[data-decode-column="decodeTimeP50"] { width: 8%; }
+.decode-table th[data-decode-column="totalLatencyP50"] { width: 8%; }
+.decode-table th[data-decode-column="totalLatencyP90"] { width: 8%; }
+.decode-table th[data-decode-column="visibleTokensP50"] { width: 7%; }
+.decode-table th[data-decode-column="reasoningTokensP50"] { width: 8%; }
+.decode-table th[data-decode-column="reasoningStatus"] { width: 10%; }
+
+.decode-table td[data-decode-column="modelId"],
+.decode-table td[data-decode-column="status"],
+.decode-table td[data-decode-column="reasoningStatus"] {
+  text-align: left;
+}
+
+.decode-table td[data-decode-column="decodeTpsP50"],
+.decode-table td[data-decode-column="ttftP50"],
+.decode-table td[data-decode-column="ttftP90"],
+.decode-table td[data-decode-column="decodeTimeP50"],
+.decode-table td[data-decode-column="totalLatencyP50"],
+.decode-table td[data-decode-column="totalLatencyP90"],
+.decode-table td[data-decode-column="length"],
+.decode-table td[data-decode-column="visibleTokensP50"],
+.decode-table td[data-decode-column="reasoningTokensP50"] {
+  text-align: right;
+}
+
+.decode-table tbody tr.decode-model-start td {
+  border-top: 2px solid var(--control-border-strong);
+}
+
+.decode-table tbody tr.decode-run-reasoning td {
+  background: var(--warning-soft);
+}
+
+.decode-table td.decode-speed-cell {
+  color: var(--accent-dark);
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.decode-matrix-section,
+.decode-chart-section {
+  margin: 22px 30px 4px;
+}
+
+.decode-run-section {
+  margin-top: 22px;
+}
+
+.decode-run-head {
+  margin: 0 30px 2px;
+}
+
+.decode-run-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+
+.decode-matrix-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.decode-matrix-head-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.decode-matrix-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+
+.decode-matrix {
+  width: 100%;
+  table-layout: fixed;
+  border: 1px solid var(--control-border);
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface);
+  font-size: 0.82rem;
+}
+
+.decode-matrix th {
+  padding: 0;
+  background: var(--surface-subtle);
+  color: var(--muted-strong);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: normal;
+}
+
+.decode-matrix th:first-child {
+  width: 40%;
+}
+
+/* The leaderboard uses the same sortable-header pattern as the run table. */
+.decode-matrix .sort-button {
+  position: relative;
+  min-height: 46px;
+  gap: 5px;
+  padding: 10px 24px 10px 12px;
+  font-size: 0.64rem;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.decode-matrix .sort-button > span:first-child {
+  min-width: 0;
+}
+
+.decode-matrix .sort-icon {
+  position: absolute;
+  top: 50%;
+  right: 9px;
+  transform: translateY(-50%);
+  transition: color 150ms ease, opacity 150ms ease;
+}
+
+.decode-matrix th[aria-sort="none"] .sort-icon {
+  opacity: 0;
+}
+
+.decode-matrix th[aria-sort="none"]:hover .sort-icon,
+.decode-matrix th[aria-sort="none"] .sort-button:focus-visible .sort-icon {
+  opacity: 1;
+}
+
+.decode-matrix th.sorted-column {
+  background: var(--surface-selected);
+  box-shadow: inset 2px 0 0 var(--focus-ring), inset -2px 0 0 var(--focus-ring);
+}
+
+.decode-matrix th.sorted-column .sort-button {
+  color: var(--accent-dark);
+}
+
+.decode-matrix td {
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.decode-matrix tbody tr:nth-child(even) td {
+  background: var(--surface-row);
+}
+
+.decode-matrix td.decode-matrix-model {
+  color: var(--ink);
+  font-weight: 750;
+  overflow-wrap: anywhere;
+  text-align: left;
+  white-space: normal;
+}
+
+.decode-matrix td.decode-speed-cell {
+  color: var(--accent-dark);
+  font-size: 1.02rem;
+  font-weight: 800;
+}
+
+.decode-chart-section {
+  margin-bottom: 8px;
+}
+
+.decode-line-chart {
+  position: relative;
+  padding: 14px 16px 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.decode-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 0 0 6px 10px;
+}
+
+.decode-chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.decode-chart-legend-item i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.decode-chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 340px;
+}
+
+.decode-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.decode-axis {
+  stroke: var(--chart-axis);
+  stroke-width: 1.5;
+}
+
+.decode-tick {
+  fill: var(--faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.decode-axis-label {
+  fill: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.decode-series {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* Invisible, thicker companion line that makes the whole series easy to hover. */
+.decode-series-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 16;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.decode-series-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.decode-point {
+  cursor: pointer;
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+
+.decode-tooltip {
+  position: fixed;
+  z-index: 50;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+.decode-chart-empty {
+  margin: 0;
+  padding: 34px 16px;
+  border: 1.5px dashed var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .decode-table {
+    min-width: 720px;
+    font-size: 0.72rem;
+  }
+
+  .decode-matrix-section,
+  .decode-chart-section {
+    margin-left: 18px;
+    margin-right: 18px;
+  }
+
+  .decode-run-head {
+    margin-left: 18px;
+    margin-right: 18px;
+  }
 }

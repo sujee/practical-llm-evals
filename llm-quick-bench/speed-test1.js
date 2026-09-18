@@ -216,6 +216,7 @@ form.addEventListener("submit", async (event) => {
     results.hidden = false;
     if (typeof resetThinkingResults === "function") resetThinkingResults();
     if (typeof resetSpeedResults === "function") resetSpeedResults();
+    if (typeof resetDecodeResults === "function") resetDecodeResults();
     updateSelectionCount();
     updateModelResultsState();
     const referenceMatches = models.filter((model) => model.referenceMatched).length;
@@ -230,6 +231,7 @@ form.addEventListener("submit", async (event) => {
     models = [];
     if (typeof resetThinkingResults === "function") resetThinkingResults();
     if (typeof resetSpeedResults === "function") resetSpeedResults();
+    if (typeof resetDecodeResults === "function") resetDecodeResults();
     renderTable();
     updateSelectionCount();
     results.hidden = false;
@@ -284,6 +286,7 @@ function toTableRow(model, modelReference) {
 
   return {
     modelId,
+    name: reference?.name ?? null,
     referenceMatched: reference != null,
     isEmbedding: isEmbeddingModel(model, reference),
     releaseDate: normalizeReleaseDate(reference?.releaseDate),
@@ -358,6 +361,7 @@ function buildModelReference(entries) {
       contextWindow,
       type: entry.type ?? null,
       releaseDate: normalizeReleaseDate(entry.model_release_date),
+      name: entry.name ?? null,
     };
 
     const name = String(entry.name ?? "");
@@ -496,10 +500,19 @@ function pricePerMillion(value, isAlreadyPerMillion = false) {
   return Math.abs(price) < 0.001 ? price * 1_000_000 : price;
 }
 
+function isDecodeBenchmarkRunningSafely() {
+  if (typeof isDecodeBenchmarkRunning !== "function") return false;
+  try {
+    return isDecodeBenchmarkRunning();
+  } catch {
+    return false;
+  }
+}
+
 let _warnedAboutMissingThinkingScript = false;
 function isThinkingBenchmarkRunning() {
   try {
-    return thinkingAbortController != null;
+    return thinkingAbortController != null || isDecodeBenchmarkRunningSafely();
   } catch (error) {
     if (!_warnedAboutMissingThinkingScript && error instanceof ReferenceError) {
       _warnedAboutMissingThinkingScript = true;
@@ -512,7 +525,7 @@ function isThinkingBenchmarkRunning() {
 let _warnedAboutMissingSpeedScript = false;
 function isSpeedBenchmarkRunning() {
   try {
-    return speedAbortController != null;
+    return speedAbortController != null || isDecodeBenchmarkRunningSafely();
   } catch (error) {
     if (!_warnedAboutMissingSpeedScript && error instanceof ReferenceError) {
       _warnedAboutMissingSpeedScript = true;
@@ -865,36 +878,27 @@ const defaultSpeedColumns = [
   "e2eP95",
   "cost",
 ];
-let visibleSpeedColumns = loadVisibleColumnSet(
-  speedColumnPreferenceKey,
-  speedColumns.map((column) => column.key),
-  defaultSpeedColumns,
-);
-
 let speedRun = null;
 let speedAbortController = null;
 let speedStartedAtMs = null;
 let speedStopClock = null;
 let speedSampleCapturePending = false;
-const speedTableSorter = createTableSorter({
-  initialKey: "tpsMedian",
-  initialDirection: "descending",
+
+const speedTable = createBenchmarkTable({
+  columns: speedColumns,
+  columnAttr: "speedColumn",
+  preferenceKey: speedColumnPreferenceKey,
+  defaultColumns: defaultSpeedColumns,
+  initialSortKey: "tpsMedian",
+  initialSortDirection: "descending",
+  pickerContainer: speedColumnOptions,
+  showAllButton: showAllSpeedColumnsButton,
   onSort: renderSpeedResults,
 });
-if (!visibleSpeedColumns.has(speedTableSorter.state.key)) {
-  speedTableSorter.reset({ key: [...visibleSpeedColumns][0], direction: "ascending" });
-}
 
 speedCancelButton.addEventListener("click", () => speedAbortController?.abort());
 exportSpeedCsvButton.addEventListener("click", exportSpeedCsv);
 exportSpeedJsonButton.addEventListener("click", exportSpeedJson);
-buildColumnPicker({
-  columns: speedColumns,
-  container: speedColumnOptions,
-  visibleColumns: visibleSpeedColumns,
-  onChange: onSpeedColumnVisibilityChange,
-});
-showAllSpeedColumnsButton.addEventListener("click", showAllSpeedColumns);
 document.addEventListener("models:selection-changed", updateSpeedRunButtonState);
 document.addEventListener("models:selection-changed", () => {
   if (speedAbortController == null) renderSpeedGraphs();
@@ -941,7 +945,7 @@ speedForm.addEventListener("submit", async (event) => {
     return;
   }
 
-  speedTableSorter.reset({ key: "tpsMedian", direction: "descending" });
+  speedTable.reset({ key: "tpsMedian", direction: "descending" });
   speedAbortController = new AbortController();
   speedStartedAtMs = performance.now();
   const runSeed = crypto.getRandomValues(new Uint32Array(1))[0];
@@ -1011,7 +1015,8 @@ function updateSpeedRunButtonState() {
   speedRunButton.disabled = !models?.some((model) => model.selected)
     || modelsLoading
     || speedAbortController != null
-    || (typeof thinkingAbortController !== "undefined" && thinkingAbortController != null);
+    || (typeof thinkingAbortController !== "undefined" && thinkingAbortController != null)
+    || isDecodeBenchmarkRunningSafely();
 }
 
 function setSpeedRunning(isRunning) {
@@ -1030,6 +1035,12 @@ function setSpeedRunning(isRunning) {
   if (typeof thinkingRunButton !== "undefined") {
     thinkingRunButton.disabled = isRunning
       || thinkingAbortController != null
+      || !models.some((model) => model.selected)
+      || modelsLoading;
+  }
+  if (typeof decodeRunButton !== "undefined") {
+    decodeRunButton.disabled = isRunning
+      || decodeAbortController != null
       || !models.some((model) => model.selected)
       || modelsLoading;
   }
@@ -1094,12 +1105,11 @@ async function runSpeedCompletion(modelId, config, outerSignal, includeUsage, ru
   }
   if (captureExchange) speedSampleCapturePending = false;
 
-  const reasoningTokens = stream.measurement.completionTokens > 0 && stream.outputText.length > 0
-    ? Math.round(
-      (stream.reasoningText.length / stream.outputText.length) * stream.measurement.completionTokens,
-    )
-    : 0;
-  const answerTokens = stream.measurement.completionTokens - reasoningTokens;
+  const { reasoningTokens, visibleOutputTokens: answerTokens } = splitCompletionTokens(
+    stream.measurement.completionTokens,
+    stream.reasoningText.length,
+    stream.outputText.length,
+  );
   const measurement = {
     ...stream.measurement,
     reasoningTokens,
@@ -1145,15 +1155,10 @@ function renderSpeedResults() {
 
 function renderSpeedTable(runUsage) {
   const sortedResults = speedRun
-    ? speedTableSorter.sortRows(speedRun.results, getSpeedSortValue)
+    ? speedTable.sortRows(speedRun.results, getSpeedSortValue)
     : [];
   const thead = document.createElement("thead");
-  speedTableSorter.renderHeaders({
-    container: thead,
-    columns: speedColumns,
-    columnAttr: "speedColumn",
-    visibleColumns: visibleSpeedColumns,
-  });
+  speedTable.renderHeaders(thead);
 
   const tbody = document.createElement("tbody");
   sortedResults.forEach((result) => {
@@ -1183,8 +1188,8 @@ function renderSpeedTable(runUsage) {
     values.forEach((value, index) => {
       const td = document.createElement("td");
       td.dataset.speedColumn = speedColumns[index].key;
-      td.hidden = !visibleSpeedColumns.has(speedColumns[index].key);
-      speedTableSorter.markCell(td, speedColumns[index].key);
+      td.hidden = !speedTable.isVisible(speedColumns[index].key);
+      speedTable.markCell(td, speedColumns[index].key);
       if (index === 1) {
         renderBenchmarkStatusCell(td, value, statusClass, result);
       } else {
@@ -1238,22 +1243,6 @@ function getSpeedSortValue(result, key) {
   return values[key];
 }
 
-function onSpeedColumnVisibilityChange(visibleColumns) {
-  if (!visibleColumns.has(speedTableSorter.state.key)) {
-    speedTableSorter.reset({ key: [...visibleColumns][0], direction: "ascending" });
-  }
-  saveVisibleColumnSet(speedColumnPreferenceKey, visibleSpeedColumns);
-  renderSpeedResults();
-}
-
-function showAllSpeedColumns() {
-  visibleSpeedColumns.clear();
-  speedColumns.forEach((column) => visibleSpeedColumns.add(column.key));
-  saveVisibleColumnSet(speedColumnPreferenceKey, visibleSpeedColumns);
-  syncColumnPicker(speedColumnOptions, visibleSpeedColumns);
-  renderSpeedResults();
-}
-
 function renderSpeedRequestTemplate() {
   const previewConfig = {
     prompt: speedPromptInput.value.trim(),
@@ -1303,8 +1292,8 @@ function exportSpeedCsv() {
   if (!speedRun) return;
   exportBenchmarkCsvFile({
     filenamePrefix: "llm-speed-test",
-    columns: getVisibleColumnDefinitions(speedColumns, visibleSpeedColumns),
-    results: speedTableSorter.sortRows(speedRun.results, getSpeedSortValue),
+    columns: speedTable.getVisibleDefinitions(),
+    results: speedTable.sortRows(speedRun.results, getSpeedSortValue),
     getValue: getSpeedSortValue,
     getTotal: getSpeedTotalValue,
   });
@@ -1314,8 +1303,8 @@ function exportSpeedJson() {
   if (!speedRun) return;
   exportBenchmarkJsonFile({
     filenamePrefix: "llm-speed-test",
-    columns: getVisibleColumnDefinitions(speedColumns, visibleSpeedColumns),
-    results: speedTableSorter.sortRows(speedRun.results, getSpeedSortValue),
+    columns: speedTable.getVisibleDefinitions(),
+    results: speedTable.sortRows(speedRun.results, getSpeedSortValue),
     getValue: getSpeedSortValue,
     getTotal: getSpeedTotalValue,
     metadata: {
