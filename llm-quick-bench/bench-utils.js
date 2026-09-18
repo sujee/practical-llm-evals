@@ -61,14 +61,22 @@ function formatBenchmarkRequest(requestUrl, body) {
 
 async function runWithConcurrency(items, concurrency, worker) {
   let nextIndex = 0;
+  let failure = null;
   async function runWorker() {
-    while (nextIndex < items.length) {
+    while (nextIndex < items.length && failure == null) {
       const item = items[nextIndex];
       nextIndex += 1;
-      await worker(item);
+      try {
+        await worker(item);
+      } catch (error) {
+        failure ??= error;
+      }
     }
   }
+  // Wait for every worker to finish its in-flight item before rejecting, so the
+  // caller never sees a failure while other items are still mutating shared state.
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, runWorker));
+  if (failure != null) throw failure;
 }
 
 // Drives a callback roughly once per `intervalMs` using requestAnimationFrame,
@@ -131,6 +139,194 @@ function buildRunThroughputSeries(runs) {
       tokensPerSecond: run.tokensPerSecond,
     }))
     .sort((left, right) => left.runNumber - right.runNumber);
+}
+
+// --- Pure benchmark view-model helpers (unit-tested without a DOM) ---
+
+// Splits a server-reported combined completion-token total into an estimated
+// reasoning share and the remaining visible (final content) tokens, using the
+// proportion of streamed reasoning vs. total output characters. Shared by Speed
+// Test 1 (as answerTokens), Thinking Test 1, and the Decode Test.
+function splitCompletionTokens(completionTokens, reasoningCharacters, outputCharacters) {
+  const total = Number.isFinite(completionTokens) ? Math.max(0, Math.round(completionTokens)) : 0;
+  if (total === 0 || !Number.isFinite(outputCharacters) || outputCharacters <= 0) {
+    return { reasoningTokens: 0, visibleOutputTokens: total };
+  }
+  const reasoningChars = Number.isFinite(reasoningCharacters) ? Math.max(0, reasoningCharacters) : 0;
+  const reasoningTokens = Math.min(total, Math.max(0, Math.round((reasoningChars / outputCharacters) * total)));
+  return { reasoningTokens, visibleOutputTokens: total - reasoningTokens };
+}
+
+// Client-observed decode speed: visible tokens generated after the first token,
+// divided by the time between the first and last visible token. The first token
+// is subtracted from the numerator because it is not part of the decode interval.
+function calculateDecodeTokensPerSecond(visibleOutputTokens, decodeTimeMs) {
+  if (!Number.isFinite(visibleOutputTokens) || visibleOutputTokens <= 1) return null;
+  if (!Number.isFinite(decodeTimeMs) || decodeTimeMs <= 0) return null;
+  return (visibleOutputTokens - 1) / (decodeTimeMs / 1000);
+}
+
+// Aggregates a group of identical Decode Test runs (same model + output length):
+// p50 decode speed, p50/p90 TTFT and total latency, plus p50 decode time, visible
+// tokens, and reasoning tokens. Percentiles use nearest-rank selection.
+function summarizeDecodeRuns(runs) {
+  const values = (key) => runs.map((run) => run[key]).filter(Number.isFinite);
+  const decodeValues = values("decodeTokensPerSecond");
+  return {
+    decodeTpsP50: percentile(decodeValues, 0.5),
+    decodeTpsMin: decodeValues.length > 0 ? Math.min(...decodeValues) : null,
+    decodeTpsMax: decodeValues.length > 0 ? Math.max(...decodeValues) : null,
+    ttftP50: percentile(values("ttftMs"), 0.5),
+    ttftP90: percentile(values("ttftMs"), 0.9),
+    decodeTimeP50: percentile(values("decodeTimeMs"), 0.5),
+    totalLatencyP50: percentile(values("totalLatencyMs"), 0.5),
+    totalLatencyP90: percentile(values("totalLatencyMs"), 0.9),
+    visibleTokensP50: percentile(values("visibleOutputTokens"), 0.5),
+    reasoningTokensP50: percentile(values("reasoningTokens"), 0.5),
+    reasoningRequired: runs.some((run) => run.reasoningRequired),
+    completed: runs.length,
+  };
+}
+
+// Maps a 0-based measured run index to the output length of its group. Warm-ups
+// (index -1) use the first length. Runs are grouped in order: the first
+// `runsPerConfig` runs use the first length, the next group the second, and so on.
+function decodeOutputTokensForRun(runIndex, outputTokenLengths, runsPerConfig) {
+  const group = runIndex >= 0 ? Math.floor(runIndex / runsPerConfig) : 0;
+  return outputTokenLengths[group] ?? outputTokenLengths[0];
+}
+
+// Flattens model results into one presentation row per model × output length.
+// Each row carries the group's completed runs, its failed-run count (failed
+// measured runs are bucketed by their 1-based run number), and an aggregate
+// summary, so rows exist before a run finishes and fill in live during a run.
+function buildDecodeRunRows(results, outputTokenLengths, runsPerConfig) {
+  const rows = [];
+  results.forEach((result) => {
+    outputTokenLengths.forEach((length, lengthIndex) => {
+      const runs = result.runs.filter((run) => run.outputTokens === length);
+      const failed = (result.errors ?? []).filter(
+        (error) => Number.isInteger(error.run)
+          && Math.floor((error.run - 1) / runsPerConfig) === lengthIndex,
+      ).length;
+      rows.push({
+        modelId: result.modelId,
+        length,
+        lengthIndex,
+        runs,
+        failed,
+        perGroup: runsPerConfig,
+        result,
+        summary: summarizeDecodeRuns(runs),
+      });
+    });
+  });
+  return rows;
+}
+
+// Per-group status so each model's output-length tests are visibly run one length
+// at a time. `lengthIndex` is the 0-based position of this length in the sequence.
+function decodeGroupStatus({ result, runs, failed, perGroup, lengthIndex }) {
+  const progress = `${runs.length}/${perGroup}`;
+  if (!result) return { text: "-", className: "" };
+  if (runs.length + failed >= perGroup) {
+    if (failed === 0) return { text: `Completed ${progress}`, className: "complete" };
+    return runs.length > 0
+      ? { text: `Partial ${progress}`, className: "partial" }
+      : { text: `Failed ${progress}`, className: "error" };
+  }
+  const activeMatch = /^run (\d+)\/(\d+)$/i.exec(result.status);
+  if (activeMatch) {
+    const activeGroup = Math.floor((Number(activeMatch[1]) - 1) / perGroup);
+    if (lengthIndex === activeGroup) {
+      return { text: `Running ${progress}`, className: "running" };
+    }
+    if (lengthIndex < activeGroup) {
+      return failed > 0
+        ? { text: `Partial ${progress}`, className: "partial" }
+        : { text: `Completed ${progress}`, className: "complete" };
+    }
+    return { text: "Waiting", className: "" };
+  }
+  if (result.status === "warming") return { text: `Warming up ${progress}`, className: "running" };
+  if (result.status === "queued") {
+    return runs.length > 0
+      ? { text: `Partial ${progress}`, className: "partial" }
+      : { text: "Queued", className: "" };
+  }
+  if (result.status === "cancelled") {
+    return { text: `Cancelled ${progress}`, className: "running" };
+  }
+  if (result.status === "error") return { text: `Error ${progress}`, className: "error" };
+  if (failed > 0) return { text: `Partial ${progress}`, className: "partial" };
+  return { text: "Waiting", className: "" };
+}
+
+// Pivots the per-length rows into one row per model, with a p50 decode-speed
+// value keyed as `tps<length>` plus a `byLength` map for the chart.
+function buildDecodeMatrixRows(runRows, outputTokenLengths) {
+  const byModel = new Map();
+  runRows.forEach((view) => {
+    if (!byModel.has(view.modelId)) {
+      byModel.set(view.modelId, { modelId: view.modelId, byLength: new Map() });
+    }
+    byModel.get(view.modelId).byLength.set(view.length, view.summary.decodeTpsP50);
+  });
+  return [...byModel.values()].map((entry) => {
+    const row = { modelId: entry.modelId, byLength: entry.byLength };
+    outputTokenLengths.forEach((length) => {
+      row[`tps${length}`] = entry.byLength.get(length) ?? null;
+    });
+    return row;
+  });
+}
+
+// Maps a shared streaming result onto the Decode Test metric set. Visible-token
+// timing comes from the content-only clocks tracked by runStreamingChatCompletion,
+// so reasoning tokens never contribute to decode speed or TTFT. Prefers the
+// provider's exact reasoning-token count; falls back to the character-proportional
+// estimate when the endpoint does not break it out.
+function buildDecodeMeasurement(stream, config, outputTokens, fixedLengthApplied = Boolean(config.fixedOutput)) {
+  const completionTokens = stream.measurement.completionTokens;
+  const serverReasoningTokens = stream.measurement.serverReasoningTokens;
+  const hasServerReasoning = Number.isFinite(serverReasoningTokens);
+  const estimated = splitCompletionTokens(
+    completionTokens,
+    stream.reasoningText.length,
+    stream.outputText.length,
+  );
+  const reasoningTokens = hasServerReasoning
+    ? Math.min(completionTokens, Math.max(0, serverReasoningTokens))
+    : estimated.reasoningTokens;
+  const visibleOutputTokens = hasServerReasoning
+    ? Math.max(0, completionTokens - reasoningTokens)
+    : estimated.visibleOutputTokens;
+  const reasoningTokenSource = hasServerReasoning ? "server" : "estimated";
+  const ttftMs = stream.measurement.ttftContentMs;
+  const lastVisibleTokenMs = stream.measurement.lastContentTokenMs;
+  const decodeTimeMs = Number.isFinite(ttftMs) && Number.isFinite(lastVisibleTokenMs)
+    ? Math.max(0, lastVisibleTokenMs - ttftMs)
+    : null;
+  const decodeTokensPerSecond = calculateDecodeTokensPerSecond(visibleOutputTokens, decodeTimeMs);
+  const reasoningRequired = reasoningTokens > 0 || stream.reasoningText.length > 0;
+  return {
+    ...stream.measurement,
+    // Override the shared first-token TTFT with the Decode Test definition: the
+    // first *visible* output token, not the first reasoning delta.
+    firstAnyTokenMs: stream.measurement.ttftMs,
+    ttftMs,
+    lastVisibleTokenMs,
+    decodeTimeMs,
+    totalLatencyMs: stream.measurement.endToEndLatencyMs,
+    visibleOutputTokens,
+    reasoningTokens,
+    reasoningTokenSource,
+    decodeTokensPerSecond,
+    reasoningRequired,
+    thinkingDisabled: Boolean(config.disableThinking) && !reasoningRequired,
+    fixedLengthApplied,
+    outputTokens,
+  };
 }
 
 function calculateCostPerCorrect(cost, correctCount) {
@@ -470,11 +666,12 @@ function exportBenchmarkJsonFile({
 }
 
 // --- Shared benchmark infrastructure (column picker, sort state, run sequence) ---
-// Used by both Speed Test 1 and Thinking Test 1 to keep column-management,
-// warmup/measured-loop, and SSE parsing logic in one place instead of duplicated
-// across the two benchmark files. Each helper is intentionally idempotent and
-// pure of test-specific state so the test files can call them with their own
-// headers, storage keys, sort-state holders, and per-run callbacks.
+// Kept here so Speed Test 1, Thinking Test 1, and the Decode Test share one
+// implementation of column management, the warmup/measured loop, and SSE parsing
+// instead of duplicating it. This file also owns the per-benchmark pure
+// view-model helpers (for example the Decode Test's token split, run grouping,
+// group status, matrix pivot, and measurement mapping above) so they can be
+// unit-tested without a DOM.
 
 function loadVisibleColumnSet(storageKey, allKeys, defaultColumns) {
   try {
@@ -675,6 +872,102 @@ function createTableSorter({ initialKey, initialDirection = "ascending", onSort 
   };
 }
 
+// One shared table controller for every benchmark results table. A benchmark
+// initializes it with its own columns (or existing static headers), preference
+// key, default visible subset, initial sort, column-picker container, and
+// re-render callback. The controller owns the visible-column set (persisted to
+// localStorage), sort state, header binding/rendering, cell marking, row
+// sorting, the column picker, and the "show all" behavior so each benchmark only
+// supplies its domain data.
+function createBenchmarkTable({
+  columns = null,
+  headers = null,
+  columnAttr,
+  preferenceKey,
+  defaultColumns = null,
+  initialSortKey,
+  initialSortDirection = "ascending",
+  pickerContainer = null,
+  showAllButton = null,
+  onSort,
+}) {
+  const allKeys = columns
+    ? columns.map((column) => column.key)
+    : headers.map((header) => header.dataset[columnAttr]);
+  const visibleColumns = loadVisibleColumnSet(preferenceKey, allKeys, defaultColumns ?? allKeys);
+  const sorter = createTableSorter({
+    initialKey: initialSortKey,
+    initialDirection: initialSortDirection,
+    onSort,
+  });
+  if (!visibleColumns.has(sorter.state.key)) {
+    sorter.reset({ key: [...visibleColumns][0], direction: "ascending" });
+  }
+
+  if (pickerContainer) {
+    buildColumnPicker({
+      columns,
+      headers,
+      columnAttr,
+      container: pickerContainer,
+      visibleColumns,
+      onChange: (nextColumns) => {
+        if (!nextColumns.has(sorter.state.key)) {
+          sorter.reset({ key: [...nextColumns][0], direction: "ascending" });
+        }
+        saveVisibleColumnSet(preferenceKey, visibleColumns);
+        onSort?.();
+      },
+    });
+  }
+
+  if (showAllButton) {
+    showAllButton.addEventListener("click", () => {
+      visibleColumns.clear();
+      allKeys.forEach((key) => visibleColumns.add(key));
+      saveVisibleColumnSet(preferenceKey, visibleColumns);
+      if (pickerContainer) syncColumnPicker(pickerContainer, visibleColumns);
+      onSort?.();
+    });
+  }
+
+  return {
+    visibleColumns,
+    allKeys,
+    get state() {
+      return sorter.state;
+    },
+    reset(nextState) {
+      sorter.reset(nextState);
+    },
+    isVisible(key) {
+      return visibleColumns.has(key);
+    },
+    renderHeaders(container) {
+      sorter.renderHeaders({ container, columns, columnAttr, visibleColumns });
+    },
+    bindHeaders() {
+      sorter.bindHeaders({ headers, columnAttr, visibleColumns });
+    },
+    updateHeaders() {
+      sorter.updateHeaders({ headers, columnAttr, visibleColumns });
+    },
+    markCell(cell, key) {
+      sorter.markCell(cell, key);
+    },
+    sortRows(rows, getSortValue) {
+      return sorter.sortRows(rows, getSortValue);
+    },
+    // Columns resolved in display order, limited to the visible selection, for
+    // CSV/JSON exports.
+    getVisibleDefinitions() {
+      return columns
+        ? getVisibleColumnDefinitions(columns, visibleColumns)
+        : getVisibleExportColumns(headers, visibleColumns, columnAttr);
+    },
+  };
+}
+
 // Live (in-progress) test-time display for a still-running result row: returns
 // elapsed ms since result.startedAtMs when the row is queued/warming/running,
 // otherwise null so callers fall back to result.totalTestTimeMs.
@@ -829,6 +1122,11 @@ async function runStreamingChatCompletion({
     const decoder = new TextDecoder();
     let buffer = "";
     let firstTokenAt = null;
+    let lastTokenAt = null;
+    // Visible (final content) timing is tracked separately from reasoning timing
+    // so the Decode Test can measure generation speed on answer tokens only.
+    let firstContentTokenAt = null;
+    let lastContentTokenAt = null;
     let outputText = "";
     let reasoningText = "";
     let contentText = "";
@@ -836,6 +1134,7 @@ async function runStreamingChatCompletion({
     const rawResponseChunks = [];
     let promptTokens = null;
     let completionTokens = null;
+    let serverReasoningTokens = null;
     let finishReason = null;
 
     const consumeLine = (line) => {
@@ -844,10 +1143,16 @@ async function runStreamingChatCompletion({
       const chunkData = extractSseChunkData(chunk);
       if (chunkData.completionTokens !== null) completionTokens = chunkData.completionTokens;
       if (chunkData.promptTokens !== null) promptTokens = chunkData.promptTokens;
+      if (chunkData.reasoningTokens !== null) serverReasoningTokens = chunkData.reasoningTokens;
       if (chunkData.finishReason) finishReason = chunkData.finishReason;
       if (chunkData.contentDelta || chunkData.reasoningDelta) {
         const receivedAt = performance.now();
         if (firstTokenAt === null) firstTokenAt = receivedAt;
+        lastTokenAt = receivedAt;
+        if (chunkData.contentDelta) {
+          if (firstContentTokenAt === null) firstContentTokenAt = receivedAt;
+          lastContentTokenAt = receivedAt;
+        }
         contentText += chunkData.contentDelta;
         reasoningText += chunkData.reasoningDelta;
         outputText += chunkData.reasoningDelta + chunkData.contentDelta;
@@ -909,10 +1214,14 @@ async function runStreamingChatCompletion({
       contentText,
       measurement: {
         ttftMs: firstTokenAt - startedAt,
+        ttftContentMs: firstContentTokenAt === null ? null : firstContentTokenAt - startedAt,
+        lastTokenMs: lastTokenAt === null ? null : lastTokenAt - startedAt,
+        lastContentTokenMs: lastContentTokenAt === null ? null : lastContentTokenAt - startedAt,
         endToEndLatencyMs: finishedAt - startedAt,
         tokensPerSecond: completionTokens / generationSeconds,
         promptTokens,
         completionTokens,
+        serverReasoningTokens,
         totalTokens: promptTokens + completionTokens,
         tokenCountEstimated: completionTokenCountEstimated || promptTokenCountEstimated,
         promptTokenCountEstimated,
@@ -1037,11 +1346,17 @@ function extractSseChunkData(chunk) {
   const promptTokens = Number.isFinite(chunk?.usage?.prompt_tokens)
     ? chunk.usage.prompt_tokens
     : null;
+  // Providers that break out reasoning tokens report them in one of these fields.
+  const reasoningTokens = Number.isFinite(chunk?.usage?.completion_tokens_details?.reasoning_tokens)
+    ? chunk.usage.completion_tokens_details.reasoning_tokens
+    : Number.isFinite(chunk?.usage?.reasoning_tokens)
+      ? chunk.usage.reasoning_tokens
+      : null;
   const finishReason = chunk?.choices?.[0]?.finish_reason ?? null;
   const delta = chunk?.choices?.[0]?.delta;
   const contentDelta = typeof delta?.content === "string" ? delta.content : "";
   const reasoningDelta = typeof delta?.reasoning_content === "string"
     ? delta.reasoning_content
     : typeof delta?.reasoning === "string" ? delta.reasoning : "";
-  return { completionTokens, promptTokens, finishReason, contentDelta, reasoningDelta };
+  return { completionTokens, promptTokens, reasoningTokens, finishReason, contentDelta, reasoningDelta };
 }

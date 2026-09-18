@@ -52,7 +52,6 @@ const exportThinkingJsonButton = document.querySelector("#export-thinking-json")
 const thinkingSortHeaders = [...document.querySelectorAll("[data-thinking-column]")];
 const thinkingColumnOptions = document.querySelector("#thinking-column-options");
 const showAllThinkingColumnsButton = document.querySelector("#show-all-thinking-columns");
-const thinkingColumnKeys = thinkingSortHeaders.map((header) => header.dataset.thinkingColumn);
 const thinkingTemplateCode = document.querySelector("#thinking-request-template-code");
 const thinkingSampleRequestNote = document.querySelector("#thinking-sample-request-note");
 const thinkingSampleRequestCode = document.querySelector("#thinking-sample-request-code");
@@ -66,27 +65,23 @@ let thinkingAbortController = null;
 let thinkingStartedAtMs = null;
 let thinkingStopClock = null;
 let thinkingSampleCapturePending = false;
-const thinkingTableSorter = createTableSorter({
-  initialKey: "accuracy",
-  initialDirection: "descending",
+
+const thinkingTable = createBenchmarkTable({
+  headers: thinkingSortHeaders,
+  columnAttr: "thinkingColumn",
+  preferenceKey: thinkingColumnPreferenceKey,
+  defaultColumns: defaultThinkingColumns,
+  initialSortKey: "accuracy",
+  initialSortDirection: "descending",
+  pickerContainer: thinkingColumnOptions,
+  showAllButton: showAllThinkingColumnsButton,
   onSort: renderThinkingResults,
 });
-let visibleThinkingColumns = loadVisibleThinkingColumns();
-if (!visibleThinkingColumns.has(thinkingTableSorter.state.key)) {
-  thinkingTableSorter.reset({
-    key: [...visibleThinkingColumns][0],
-    direction: "ascending",
-  });
-}
+thinkingTable.bindHeaders();
 
 thinkingCancelButton.addEventListener("click", () => thinkingAbortController?.abort());
 exportThinkingCsvButton.addEventListener("click", exportThinkingCsv);
 exportThinkingJsonButton.addEventListener("click", exportThinkingJson);
-thinkingTableSorter.bindHeaders({
-  headers: thinkingSortHeaders,
-  columnAttr: "thinkingColumn",
-  visibleColumns: visibleThinkingColumns,
-});
 [
   thinkingRowsInput,
   thinkingFormatSelect,
@@ -95,15 +90,7 @@ thinkingTableSorter.bindHeaders({
   control.addEventListener("input", renderThinkingRequestTemplate);
   control.addEventListener("change", renderThinkingRequestTemplate);
 });
-initializeThinkingColumnPicker();
 resetThinkingResults();
-showAllThinkingColumnsButton.addEventListener("click", () => {
-  visibleThinkingColumns.clear();
-  thinkingColumnKeys.forEach((key) => visibleThinkingColumns.add(key));
-  saveVisibleThinkingColumns();
-  syncThinkingColumnPicker();
-  renderThinkingResults();
-});
 document.addEventListener("models:selection-changed", updateThinkingRunButtonState);
 renderThinkingMethodologySample();
 renderThinkingRequestTemplate();
@@ -206,7 +193,8 @@ function updateThinkingRunButtonState() {
   thinkingRunButton.disabled = !models?.some((model) => model.selected)
     || modelsLoading
     || (typeof speedAbortController !== "undefined" && speedAbortController != null)
-    || thinkingAbortController != null;
+    || thinkingAbortController != null
+    || (typeof isDecodeBenchmarkRunning === "function" && isDecodeBenchmarkRunning());
 }
 
 function setThinkingRunning(isRunning) {
@@ -227,6 +215,12 @@ function setThinkingRunning(isRunning) {
   if (typeof speedRunButton !== "undefined") {
     speedRunButton.disabled = isRunning
       || speedAbortController != null
+      || !models.some((model) => model.selected)
+      || modelsLoading;
+  }
+  if (typeof decodeRunButton !== "undefined") {
+    decodeRunButton.disabled = isRunning
+      || decodeAbortController != null
       || !models.some((model) => model.selected)
       || modelsLoading;
   }
@@ -282,13 +276,11 @@ async function runThinkingCompletion(modelId, task, config, outerSignal, include
   const correct = gradeThinkingAnswer(extracted, task.expected);
   // The server only reports the total completion-token count; split it
   // proportionally between reasoning and answer characters as an estimate.
-  const reasoningTokens = stream.measurement.completionTokens > 0 && stream.outputText.length > 0
-    ? Math.round(
-      (stream.reasoningText.length / stream.outputText.length)
-      * stream.measurement.completionTokens,
-    )
-    : 0;
-  const answerTokens = stream.measurement.completionTokens - reasoningTokens;
+  const { reasoningTokens, visibleOutputTokens: answerTokens } = splitCompletionTokens(
+    stream.measurement.completionTokens,
+    stream.reasoningText.length,
+    stream.outputText.length,
+  );
 
   if (!correct || !extracted.ok) {
     const expectedAnswer = `${task.expected.id}|${task.expected.name}`;
@@ -529,7 +521,7 @@ function renderThinkingResults() {
     ? "Unavailable because at least one model has usage without pricing metadata."
     : "Total benchmark cost divided by correct measured runs.";
 
-  updateThinkingSortHeaders();
+  thinkingTable.updateHeaders();
   const sortedResults = getSortedThinkingResults();
 
   sortedResults.forEach((result) => {
@@ -569,11 +561,11 @@ function renderThinkingResults() {
 
     const row = document.createElement("tr");
     row.dataset.modelId = result.modelId;
-    thinkingColumnKeys.forEach((key) => {
+    thinkingTable.allKeys.forEach((key) => {
       const cell = document.createElement("td");
       cell.dataset.thinkingColumn = key;
-      cell.hidden = !visibleThinkingColumns.has(key);
-      thinkingTableSorter.markCell(cell, key);
+      cell.hidden = !thinkingTable.isVisible(key);
+      thinkingTable.markCell(cell, key);
       if (key === "status") {
         renderBenchmarkStatusCell(cell, values.status, statusClass, result);
       } else if (key === "accuracy") {
@@ -617,48 +609,7 @@ function resetThinkingResults() {
   exportThinkingCsvButton.disabled = true;
   exportThinkingJsonButton.disabled = true;
   thinkingResults.hidden = false;
-  updateThinkingSortHeaders();
-}
-
-function updateThinkingSortHeaders() {
-  thinkingTableSorter.updateHeaders({
-    headers: thinkingSortHeaders,
-    columnAttr: "thinkingColumn",
-    visibleColumns: visibleThinkingColumns,
-  });
-}
-
-function initializeThinkingColumnPicker() {
-  buildColumnPicker({
-    headers: thinkingSortHeaders,
-    columnAttr: "thinkingColumn",
-    container: thinkingColumnOptions,
-    visibleColumns: visibleThinkingColumns,
-    onChange: onThinkingColumnVisibilityChange,
-  });
-}
-
-function onThinkingColumnVisibilityChange(visibleColumns) {
-  if (!visibleColumns.has(thinkingTableSorter.state.key)) {
-    thinkingTableSorter.reset({
-      key: [...visibleColumns][0],
-      direction: "ascending",
-    });
-  }
-  saveVisibleThinkingColumns();
-  renderThinkingResults();
-}
-
-function syncThinkingColumnPicker() {
-  syncColumnPicker(thinkingColumnOptions, visibleThinkingColumns);
-}
-
-function loadVisibleThinkingColumns() {
-  return loadVisibleColumnSet(thinkingColumnPreferenceKey, thinkingColumnKeys, defaultThinkingColumns);
-}
-
-function saveVisibleThinkingColumns() {
-  saveVisibleColumnSet(thinkingColumnPreferenceKey, visibleThinkingColumns);
+  thinkingTable.updateHeaders();
 }
 
 function getThinkingSortValue(result, key) {
@@ -782,7 +733,7 @@ function exportThinkingCsv() {
   if (!thinkingRun) return;
   exportBenchmarkCsvFile({
     filenamePrefix: "llm-thinking-test",
-    columns: getVisibleThinkingExportColumns(),
+    columns: thinkingTable.getVisibleDefinitions(),
     results: getSortedThinkingResults(),
     getValue: getThinkingSortValue,
     getTotal: getThinkingTotalValue,
@@ -793,7 +744,7 @@ function exportThinkingJson() {
   if (!thinkingRun) return;
   exportBenchmarkJsonFile({
     filenamePrefix: "llm-thinking-test",
-    columns: getVisibleThinkingExportColumns(),
+    columns: thinkingTable.getVisibleDefinitions(),
     results: getSortedThinkingResults(),
     getValue: getThinkingSortValue,
     getTotal: getThinkingTotalValue,
@@ -806,16 +757,8 @@ function exportThinkingJson() {
   });
 }
 
-function getVisibleThinkingExportColumns() {
-  return getVisibleExportColumns(
-    thinkingSortHeaders,
-    visibleThinkingColumns,
-    "thinkingColumn",
-  );
-}
-
 function getSortedThinkingResults() {
-  return thinkingTableSorter.sortRows(thinkingRun.results, getThinkingSortValue);
+  return thinkingTable.sortRows(thinkingRun.results, getThinkingSortValue);
 }
 
 function getThinkingTotalValue(key) {
