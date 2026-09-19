@@ -188,6 +188,24 @@ function summarizeDecodeRuns(runs) {
   };
 }
 
+// Parses the Decode Test's comma-separated output-lengths field into an
+// ascending, deduplicated list of integers. Blank and non-numeric entries are
+// skipped; each remaining value is clamped to [minLength, maxLength] like
+// clampInteger. Returns an empty array when nothing valid remains so callers
+// can apply their own fallback (the benchmark defaults to 100, 500, 1000).
+function parseDecodeOutputTokenOptions(raw, { minLength = 1, maxLength = 100000 } = {}) {
+  const lengths = [];
+  String(raw ?? "").split(",").forEach((part) => {
+    const trimmed = part.trim();
+    if (trimmed === "") return;
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed)) return;
+    const length = Math.min(maxLength, Math.max(minLength, Math.round(parsed)));
+    if (!lengths.includes(length)) lengths.push(length);
+  });
+  return lengths.sort((a, b) => a - b);
+}
+
 // Maps a 0-based measured run index to the output length of its group. Warm-ups
 // (index -1) use the first length. Runs are grouped in order: the first
 // `runsPerConfig` runs use the first length, the next group the second, and so on.

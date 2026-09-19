@@ -81,6 +81,7 @@ function loadBenchUtils() {
     formatBenchmarkErrorTooltip,
     formatTokenUsageBreakdown,
     getVisibleColumnDefinitions,
+    parseDecodeOutputTokenOptions,
     parseSseLine,
     runBenchmarkSequence,
     runStreamingChatCompletion,
@@ -288,6 +289,55 @@ test("decode run index maps to its output-length group (warm-up uses the first)"
   assert.equal(utils.decodeOutputTokensForRun(9, lengths, 5), 500);
   assert.equal(utils.decodeOutputTokensForRun(10, lengths, 5), 1000);
   assert.equal(utils.decodeOutputTokensForRun(14, lengths, 5), 1000);
+});
+
+test("decode output-lengths parser handles comma-separated values", () => {
+  const { utils } = loadBenchUtils();
+  const parse = (raw, options) => JSON.parse(JSON.stringify(utils.parseDecodeOutputTokenOptions(raw, options)));
+  assert.deepEqual(parse("100,500,1000"), [100, 500, 1000]);
+  assert.deepEqual(parse(" 100 , 500 , 1000 "), [100, 500, 1000]);
+  assert.deepEqual(parse("1000,100"), [100, 1000]);
+  assert.deepEqual(parse("500, 500,500"), [500]);
+  assert.deepEqual(parse("100,,500,abc"), [100, 500]);
+  assert.deepEqual(parse("99.6"), [100]);
+  assert.deepEqual(parse("0,-5"), [1]);
+  assert.deepEqual(parse("2000000"), [100000]);
+  assert.deepEqual(parse(""), []);
+  assert.deepEqual(parse(" , abc ,"), []);
+  assert.deepEqual(parse(null), []);
+  assert.deepEqual(parse(undefined), []);
+  assert.deepEqual(parse("50", { maxLength: 40 }), [40]);
+});
+
+test("decode field text determines the exact max_tokens sequence of a run", () => {
+  const { utils } = loadBenchUtils();
+  // Mirrors the submit handler: parse the field's comma-separated text, then
+  // map every request (warm-up + measured runs) to the length it must send.
+  const lengths = utils.parseDecodeOutputTokenOptions(" 50, 10 , 20 ");
+  const runsPerConfig = 2;
+  const maxTokensPerRequest = [-1, 0, 1, 2, 3, 4, 5].map((runIndex) =>
+    utils.decodeOutputTokensForRun(runIndex, lengths, runsPerConfig));
+  assert.deepEqual(maxTokensPerRequest, [10, 10, 10, 20, 20, 50, 50]);
+
+  // The run count scales with the number of lengths in the field, and every
+  // completed run is bucketed into its own row.
+  const results = [{
+    modelId: "vendor/model",
+    runs: maxTokensPerRequest.slice(1).map((outputTokens) => ({
+      outputTokens,
+      decodeTokensPerSecond: 50,
+      ttftMs: 10,
+      decodeTimeMs: 500,
+      totalLatencyMs: 600,
+      visibleOutputTokens: outputTokens,
+      reasoningTokens: 0,
+      reasoningRequired: false,
+    })),
+    errors: [],
+  }];
+  const rows = utils.buildDecodeRunRows(results, lengths, runsPerConfig);
+  assert.deepEqual(Array.from(rows, (row) => row.length), [10, 20, 50]);
+  assert.deepEqual(Array.from(rows, (row) => row.runs.length), [2, 2, 2]);
 });
 
 test("decode run rows bucket runs and failed-run numbers by output length", () => {

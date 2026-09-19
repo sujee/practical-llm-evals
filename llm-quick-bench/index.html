@@ -585,7 +585,7 @@ Output nothing else. Do not include reasoning, explanations, labels, markdown, o
       <section id="decode-benchmark" class="benchmark" aria-label="Decode Test benchmark">
         <section class="methodology-overview" aria-labelledby="decode-methodology-heading">
           <h3 id="decode-methodology-heading">What the Decode Test measures</h3>
-          <p>Client-observed output generation speed from a short fixed prompt. Each model runs the configured number of tests at 100, 500, and 1000 output tokens; each length is summarized with p50/p90 percentiles.</p>
+          <p>Client-observed output generation speed from a short fixed prompt. Each model runs the configured number of tests at each configured output length (default: 100, 500, and 1000 tokens); each length is summarized with p50/p90 percentiles.</p>
           <div class="methodology-metrics">
             <div>
               <strong>Decode Speed (p50)</strong>
@@ -605,8 +605,8 @@ Output nothing else. Do not include reasoning, explanations, labels, markdown, o
         <form id="decode-form" class="benchmark-form">
           <div class="field">
             <label for="decode-lengths">Output lengths</label>
-            <input id="decode-lengths" type="text" value="100 · 500 · 1000 tokens" readonly disabled />
-            <p class="hint">Every length is tested for each model.</p>
+            <input id="decode-lengths" type="text" value="100,500,1000" />
+            <p class="hint">Comma-separated output lengths, sent as <code>max_tokens</code>. Every length is tested for each model; invalid or empty input falls back to 100, 500, 1000.</p>
           </div>
           <div class="field">
             <label for="decode-runs">Runs per output length</label>
@@ -616,7 +616,7 @@ Output nothing else. Do not include reasoning, explanations, labels, markdown, o
           <div class="field">
             <label for="decode-concurrency">Parallel models to test</label>
             <input id="decode-concurrency" type="number" min="1" max="12" value="3" required />
-            <p class="hint">Different models run in parallel; a model's 100/500/1000 tests always run serially.</p>
+            <p class="hint">Different models run in parallel; a model's output-length tests always run serially.</p>
           </div>
           <div class="field">
             <label for="decode-timeout">Timeout / request (sec)</label>
@@ -674,7 +674,7 @@ Output nothing else. Do not include reasoning, explanations, labels, markdown, o
             <div class="decode-matrix-head">
               <h3 id="decode-matrix-heading">Leaderboard Decode Speed (tok/s)</h3>
               <div class="decode-matrix-head-actions">
-                <p class="metric-note">p50 per model by output length, sorted by the 1000-token column. Select any column header to re-sort.</p>
+                <p class="metric-note">p50 per model by output length, sorted by the longest-length column. Select any column header to re-sort.</p>
                 <div class="export-actions">
                   <button id="export-decode-matrix-csv" class="secondary-button" type="button" disabled>Export CSV</button>
                   <button id="export-decode-matrix-json" class="secondary-button" type="button" disabled>Export JSON</button>
@@ -686,7 +686,7 @@ Output nothing else. Do not include reasoning, explanations, labels, markdown, o
           <section class="decode-chart-section" aria-labelledby="decode-chart-heading">
             <div class="decode-matrix-head">
               <h3 id="decode-chart-heading">Decode Speed by output length</h3>
-              <p class="metric-note">p50 tok/s per model across 100, 500, and 1000 output tokens. Hover a line or point for the full model id and values.</p>
+              <p class="metric-note">p50 tok/s per model across the configured output lengths. Hover a line or point for the full model id and values.</p>
             </div>
             <div id="decode-chart"></div>
           </section>
@@ -728,7 +728,7 @@ Output nothing else. Do not include reasoning, explanations, labels, markdown, o
           <div class="methodology">
             <ul>
               <li><strong>Prompt</strong> is short and fixed so the test isolates output generation rather than prompt processing.</li>
-              <li><strong>Three output lengths per model</strong> — 100, 500, and 1000 tokens — each repeated for the configured number of runs and reported as its own table row. The request sends <code>max_tokens</code> equal to the length and, when enabled, <code>min_tokens</code> plus <code>ignore_eos: true</code> so the model cannot stop early.</li>
+              <li><strong>Every configured output length per model</strong> — comma-separated in the form and defaulting to 100, 500, and 1000 tokens — each repeated for the configured number of runs and reported as its own table row. The request sends <code>max_tokens</code> equal to the length and, when enabled, <code>min_tokens</code> plus <code>ignore_eos: true</code> so the model cannot stop early.</li>
               <li><strong>Each row aggregates its runs</strong> with nearest-rank percentiles: decode speed p50; TTFT p50 and p90; total latency p50 and p90; plus p50 decode time, visible tokens, and reasoning tokens.</li>
               <li><strong>Decode Speed</strong> = (visible output tokens − 1) ÷ seconds between the first and last visible output token. The first token is subtracted because it is not part of the decode interval.</li>
               <li><strong>TTFT</strong> runs from request dispatch to the first visible (final content) token. Reasoning deltas are ignored for TTFT.</li>

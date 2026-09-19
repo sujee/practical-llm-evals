@@ -27,16 +27,35 @@ test("Decode Test tab, panel, and script are wired into the page", () => {
   }
 });
 
-test("Decode Test runs three fixed output lengths and shows the required prompt", () => {
+test("Decode Test runs editable comma-separated output lengths with 100/500/1000 defaults", () => {
   const panel = html.slice(html.indexOf('id="decode-test-panel"'));
-  assert.match(panel, /100 · 500 · 1000 tokens/);
+  assert.match(panel, /id="decode-lengths"[^>]*value="100,500,1000"/);
   assert.match(panel, /Generate a continuous stream of lowercase English words separated by single spaces\./);
   assert.match(panel, /id="decode-disable-thinking"[^>]*checked/);
   assert.match(panel, /id="decode-fixed-output"[^>]*checked/);
 
-  assert.match(decodeSource, /const DECODE_OUTPUT_TOKEN_OPTIONS = \[100, 500, 1000\];/);
-  assert.match(decodeSource, /runs: runsPerConfig \* DECODE_OUTPUT_TOKEN_OPTIONS\.length/);
-  assert.match(decodeSource, /outputTokenLengths: \[\.\.\.DECODE_OUTPUT_TOKEN_OPTIONS\]/);
+  assert.match(decodeSource, /const DECODE_DEFAULT_OUTPUT_TOKENS = \[100, 500, 1000\];/);
+  assert.match(decodeSource, /function getDecodeOutputTokenOptions\(\)/);
+  assert.match(decodeSource, /parseDecodeOutputTokenOptions\(decodeLengthsInput\?\.value\)/);
+  assert.match(decodeSource, /runs: runsPerConfig \* outputTokenLengths\.length/);
+  assert.match(decodeSource, /outputTokenLengths: \[\.\.\.outputTokenLengths\]/);
+});
+
+test("Decode Test run sequence is driven by the output-lengths field, not a hard-coded list", () => {
+  // The submit handler derives every length from the field via the parser.
+  assert.match(decodeSource, /const outputTokenLengths = getDecodeOutputTokenOptions\(\);/);
+  assert.match(decodeSource, /const config = \{[\s\S]{0,400}outputTokenLengths: \[\.\.\.outputTokenLengths\]/);
+  // Each measured run's max_tokens comes from that parsed config, never from
+  // DECODE_DEFAULT_OUTPUT_TOKENS.
+  assert.match(decodeSource, /decodeOutputTokensForRun\([\s\S]{0,120}config\.outputTokenLengths,/);
+  assert.match(decodeSource, /lengths\.length > 0 \? lengths : \[\.\.\.DECODE_DEFAULT_OUTPUT_TOKENS\]/);
+  assert.doesNotMatch(decodeSource, /outputTokenLengths: \[\.\.\.DECODE_DEFAULT_OUTPUT_TOKENS\]/);
+  // The hard-coded defaults are only referenced in the declaration and fallback.
+  assert.equal(
+    (decodeSource.match(/DECODE_DEFAULT_OUTPUT_TOKENS/g) ?? []).length,
+    2,
+    "DECODE_DEFAULT_OUTPUT_TOKENS should appear only in its declaration and the empty-field fallback",
+  );
 });
 
 test("Decode Test defaults to five runs per output length", () => {
@@ -76,7 +95,7 @@ test("Decode Test uses the shared helpers extracted into bench-utils", () => {
 });
 
 test("Decode Test never re-enables disabled fields and always releases the capture slot", () => {
-  // The read-only output-lengths input must stay disabled after a run.
+  // Any control disabled/read-only in the markup must stay disabled after a run.
   assert.match(decodeSource, /filter\(\(control\) => !control\.disabled && !control\.readOnly\)/);
   // The sample-capture reservation is released even when a request throws.
   assert.match(decodeSource, /finally \{[\s\S]{0,200}decodeSampleCapturePending = false/);
