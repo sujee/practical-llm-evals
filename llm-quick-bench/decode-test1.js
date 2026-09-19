@@ -1,9 +1,10 @@
 // Decode Test - client-observed output generation speed.
 //
 // Reuses the shared model loader and selection state owned by speed-test1.js and
-// the streaming/summary/format helpers in bench-utils.js. Each model runs three
-// measured tests, one per fixed output length (100, 500, 1000 tokens), streaming
-// a short fixed prompt, and measures for every run:
+// the streaming/summary/format helpers in bench-utils.js. Each model runs one
+// measured test per configured output length (comma-separated in the form and
+// defaulting to 100, 500, 1000 tokens), streaming a short fixed prompt, and
+// measures for every run:
 //
 //   Decode Speed = (visible output tokens - 1) / (first -> last visible token time)
 //   TTFT         = request start -> first visible output token
@@ -19,9 +20,12 @@
 // Loaded with `defer`, after speed-test1.js and thinking-test1.js.
 
 const DECODE_PROMPT = "Generate a continuous stream of lowercase English words separated by single spaces. Do not use punctuation, numbers, headings, explanations, or formatting. Begin immediately and continue generating until stopped.";
-const DECODE_OUTPUT_TOKEN_OPTIONS = [100, 500, 1000];
+// Fallback only: used when the output-lengths field parses to no valid values.
+// The tests that run always come from the field, never from this list.
+const DECODE_DEFAULT_OUTPUT_TOKENS = [100, 500, 1000];
 
 const decodeForm = document.querySelector("#decode-form");
+const decodeLengthsInput = document.querySelector("#decode-lengths");
 const decodeRunsInput = document.querySelector("#decode-runs");
 const decodeConcurrencyInput = document.querySelector("#decode-concurrency");
 const decodeTimeoutInput = document.querySelector("#decode-timeout");
@@ -30,8 +34,8 @@ const decodeDisableThinkingInput = document.querySelector("#decode-disable-think
 const decodeFixedOutputInput = document.querySelector("#decode-fixed-output");
 const decodeRequireServerTokensInput = document.querySelector("#decode-require-server-tokens");
 const decodeLogConsoleInput = document.querySelector("#decode-log-console");
-// Exclude controls that are disabled/read-only in the markup (the fixed output
-// lengths field) so toggling them back on after a run does not enable them.
+// Exclude any control that is disabled/read-only in the markup so toggling the
+// form back on after a run does not enable it.
 const decodeConfigInputs = [...decodeForm.querySelectorAll("input, select, textarea")]
   .filter((control) => !control.disabled && !control.readOnly);
 const decodeRunButton = document.querySelector("#decode-run-button");
@@ -78,14 +82,35 @@ const decodeColumns = [
 const decodeColumnPreferenceKey = "llm-quick-bench:decode-columns:v1";
 const defaultDecodeColumns = decodeColumns.map((column) => column.key);
 
-const decodeMatrixColumns = [
-  { key: "modelId", label: "Model" },
-  ...DECODE_OUTPUT_TOKEN_OPTIONS.map((length) => ({
-    key: `tps${length}`,
-    label: String(length),
-  })),
-];
-const DECODE_MATRIX_SORT_KEY = `tps${DECODE_OUTPUT_TOKEN_OPTIONS[DECODE_OUTPUT_TOKEN_OPTIONS.length - 1]}`;
+// Leaderboard pivot (one row per model, one column per output length). The
+// columns follow the configured output lengths, so the shared table controller
+// is rebuilt whenever the active lengths change; the longest length stays the
+// default sort column. Returns true when the table was recreated.
+let decodeMatrixColumns = [];
+let decodeMatrixTable = null;
+let decodeMatrixLengthsKey = null;
+
+function rebuildDecodeMatrixTable(lengths) {
+  const key = lengths.join(",");
+  if (key === decodeMatrixLengthsKey) return false;
+  decodeMatrixLengthsKey = key;
+  decodeMatrixColumns = [
+    { key: "modelId", label: "Model" },
+    ...lengths.map((length) => ({
+      key: `tps${length}`,
+      label: String(length),
+    })),
+  ];
+  decodeMatrixTable = createBenchmarkTable({
+    columns: decodeMatrixColumns,
+    columnAttr: "decodeMatrixColumn",
+    preferenceKey: "llm-quick-bench:decode-matrix-columns:v1",
+    initialSortKey: `tps${lengths[lengths.length - 1]}`,
+    initialSortDirection: "descending",
+    onSort: renderDecodeMatrix,
+  });
+  return true;
+}
 
 let decodeRun = null;
 let decodeAbortController = null;
@@ -105,17 +130,6 @@ const decodeTable = createBenchmarkTable({
   onSort: renderDecodeResults,
 });
 
-// Leaderboard pivot (one row per model, one column per output length). Built from
-// the same controller, sorted by the longest output length descending by default.
-const decodeMatrixTable = createBenchmarkTable({
-  columns: decodeMatrixColumns,
-  columnAttr: "decodeMatrixColumn",
-  preferenceKey: "llm-quick-bench:decode-matrix-columns:v1",
-  initialSortKey: DECODE_MATRIX_SORT_KEY,
-  initialSortDirection: "descending",
-  onSort: renderDecodeMatrix,
-});
-
 exportDecodeCsvButton.addEventListener("click", exportDecodeCsv);
 exportDecodeJsonButton.addEventListener("click", exportDecodeJson);
 exportDecodeMatrixCsvButton.addEventListener("click", exportDecodeMatrixCsv);
@@ -125,9 +139,15 @@ document.addEventListener("models:selection-changed", updateDecodeRunButtonState
 document.addEventListener("models:selection-changed", () => {
   if (decodeAbortController == null) renderDecodeResults();
 });
-[decodePromptInput, decodeDisableThinkingInput, decodeFixedOutputInput].forEach((control) => {
+[decodeLengthsInput, decodePromptInput, decodeDisableThinkingInput, decodeFixedOutputInput].forEach((control) => {
   control.addEventListener("input", renderDecodeRequestTemplate);
   control.addEventListener("change", renderDecodeRequestTemplate);
+});
+decodeLengthsInput.addEventListener("input", () => {
+  if (isDecodeBenchmarkRunning()) return;
+  if (rebuildDecodeMatrixTable(getActiveDecodeOutputTokenOptions())) {
+    renderBenchmarkSafely(renderDecodeResults, "Decode Test output lengths change");
+  }
 });
 providerSelect.addEventListener("change", renderDecodeRequestTemplate);
 endpointInput.addEventListener("input", renderDecodeRequestTemplate);
@@ -155,10 +175,11 @@ decodeForm.addEventListener("submit", async (event) => {
   }
 
   const runsPerConfig = clampInteger(decodeRunsInput.value, 1, 20);
+  const outputTokenLengths = getDecodeOutputTokenOptions();
   const config = {
     runsPerConfig,
-    runs: runsPerConfig * DECODE_OUTPUT_TOKEN_OPTIONS.length,
-    outputTokenLengths: [...DECODE_OUTPUT_TOKEN_OPTIONS],
+    runs: runsPerConfig * outputTokenLengths.length,
+    outputTokenLengths: [...outputTokenLengths],
     concurrency: clampInteger(decodeConcurrencyInput.value, 1, 12),
     timeoutMs: clampInteger(decodeTimeoutInput.value, 10, 600) * 1000,
     prompt,
@@ -185,7 +206,7 @@ decodeForm.addEventListener("submit", async (event) => {
       temperature: 0,
       topP: 1,
       prompt: "short fixed prompt requesting a continuous stream of lowercase words",
-      outputLengths: DECODE_OUTPUT_TOKEN_OPTIONS.join(", ") + " tokens",
+      outputLengths: config.outputTokenLengths.join(", ") + " tokens",
       runsPerOutputLength: runsPerConfig,
       percentiles: "decode speed p50; TTFT p50/p90; total latency p50/p90; nearest rank",
       decodeSpeed: "(visible output tokens - 1) / seconds from first visible token to last visible token",
@@ -198,6 +219,7 @@ decodeForm.addEventListener("submit", async (event) => {
       percentile: "nearest rank",
     },
   });
+  rebuildDecodeMatrixTable(config.outputTokenLengths);
   exportDecodeCsvButton.disabled = false;
   exportDecodeJsonButton.disabled = false;
   exportDecodeMatrixCsvButton.disabled = false;
@@ -209,7 +231,7 @@ decodeForm.addEventListener("submit", async (event) => {
   renderBenchmarkSafely(renderDecodeResults, "Decode Test initial state");
   renderBenchmarkSafely(renderDecodeMethodologySample, "Decode Test sample exchange reset");
   scrollToBenchmarkResults(decodeResults);
-  setDecodeStatus(`Running ${selectedModels.length} models × ${DECODE_OUTPUT_TOKEN_OPTIONS.length} output lengths × ${runsPerConfig} runs with up to ${Math.min(config.concurrency, selectedModels.length)} models in parallel…`);
+  setDecodeStatus(`Running ${selectedModels.length} models × ${config.outputTokenLengths.length} output lengths (${config.outputTokenLengths.join(", ")}) × ${runsPerConfig} runs with up to ${Math.min(config.concurrency, selectedModels.length)} models in parallel…`);
 
   let orchestrationFailed = false;
   try {
@@ -421,6 +443,21 @@ function getDecodeRunsPerConfig() {
   return clampInteger(decodeRunsInput?.value, 1, 20);
 }
 
+// Parses the comma-separated output-lengths field; falls back to the
+// 100/500/1000 defaults when nothing valid can be parsed.
+function getDecodeOutputTokenOptions() {
+  const lengths = parseDecodeOutputTokenOptions(decodeLengthsInput?.value);
+  return lengths.length > 0 ? lengths : [...DECODE_DEFAULT_OUTPUT_TOKENS];
+}
+
+// Rows, the leaderboard matrix, and the chart follow the active run's lengths
+// while results exist; otherwise they preview the lengths in the form field.
+function getActiveDecodeOutputTokenOptions() {
+  const runLengths = decodeRun?.config?.outputTokenLengths;
+  if (Array.isArray(runLengths) && runLengths.length > 0) return runLengths;
+  return getDecodeOutputTokenOptions();
+}
+
 // Flattens model results into one row per model × output length. Each row carries
 // the group's completed runs and an aggregate summary, so rows exist before a run
 // finishes and the table is visible and fills in during a run.
@@ -437,7 +474,7 @@ function getDecodeRunRows() {
         outputPerMillionTokens: model.outputPrice,
       },
     }));
-  return buildDecodeRunRows(results, DECODE_OUTPUT_TOKEN_OPTIONS, getDecodeRunsPerConfig());
+  return buildDecodeRunRows(results, getActiveDecodeOutputTokenOptions(), getDecodeRunsPerConfig());
 }
 
 function getDecodeSortValue(view, key) {
@@ -454,7 +491,7 @@ function getDecodeSortValue(view, key) {
 // One row per model with a p50 decode-speed value per output length, keyed as
 // `tps<length>` for the leaderboard table plus a `byLength` map for the chart.
 function getDecodeMatrixRows() {
-  return buildDecodeMatrixRows(getDecodeRunRows(), DECODE_OUTPUT_TOKEN_OPTIONS);
+  return buildDecodeMatrixRows(getDecodeRunRows(), getActiveDecodeOutputTokenOptions());
 }
 
 function getDecodeMatrixSortValue(row, key) {
@@ -560,7 +597,7 @@ function renderDecodeChart() {
   const padBottom = 54;
   const innerWidth = width - padLeft - padRight;
   const innerHeight = height - padTop - padBottom;
-  const lengths = DECODE_OUTPUT_TOKEN_OPTIONS;
+  const lengths = getActiveDecodeOutputTokenOptions();
   const allValues = rows.flatMap((row) => [...row.byLength.values()]).filter(Number.isFinite);
   const maxValue = Math.max(1, ...allValues) * 1.15;
   const xFor = (index) => (lengths.length > 1
@@ -951,11 +988,12 @@ function exportDecodeMatrixJson() {
 }
 
 function renderDecodeRequestTemplate() {
+  const outputTokenLengths = getDecodeOutputTokenOptions();
   const previewConfig = {
     prompt: decodePromptInput.value.trim() || DECODE_PROMPT,
     disableThinking: decodeDisableThinkingInput.checked,
     fixedOutput: decodeFixedOutputInput.checked,
-    outputTokenLengths: [...DECODE_OUTPUT_TOKEN_OPTIONS],
+    outputTokenLengths,
   };
   const endpointValue = endpointInput.value.trim() || "https://api.example.com/v1";
   let requestUrl;
@@ -972,10 +1010,10 @@ function renderDecodeRequestTemplate() {
     true,
     providerSelect.value,
     previewConfig.fixedOutput,
-    DECODE_OUTPUT_TOKEN_OPTIONS[0],
+    outputTokenLengths[0],
   );
   decodeTemplateCode.textContent = [
-    `// Repeated once per output length: ${DECODE_OUTPUT_TOKEN_OPTIONS.join(", ")}`,
+    `// Repeated once per output length: ${outputTokenLengths.join(", ")}`,
     formatBenchmarkRequest(requestUrl, body),
   ].join("\n");
 }
@@ -1013,6 +1051,7 @@ function resetDecodeResults() {
   exportDecodeJsonButton.disabled = true;
   exportDecodeMatrixCsvButton.disabled = true;
   exportDecodeMatrixJsonButton.disabled = true;
+  rebuildDecodeMatrixTable(getActiveDecodeOutputTokenOptions());
   decodeResults.hidden = false;
   renderDecodeResults();
 }
