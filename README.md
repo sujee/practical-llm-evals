@@ -4,12 +4,20 @@ Hands-on benchmarks, performance tests, and visual explorations for open languag
 
 Use these browser-based tools to compare endpoint speed, model quality, pricing, and capabilities—or browse the experimental projects built with AI coding agents.
 
-## Featured tools
+## Tools
 
-| Project | What it does | Try it live |
-| --- | --- | --- |
-| ⚡ [**Quick LLM Bench**](./llm-quick-bench/README.md) | Measures streaming performance and reasoning quality across LLM endpoints, including time to first token, token throughput, end-to-end latency, accuracy, and cost. | [Try it live →](https://sujee.github.io/practical-llm-evals/llm-quick-bench/) |
-| 📊 [**Nebius Token Factory Model Visualizer**](./providers/nebius-token-factory/model-visualizer/README.md) | Explores model intelligence, pricing, release timelines, and context-window trends. | [Explore models →](https://sujee.github.io/practical-llm-evals/providers/nebius-token-factory/model-visualizer/) |
+### LLM Quick Bench
+
+A easy to use, browser based benchmark suite to test inference API end points.
+
+🎓 LLM Quick Bench has graduated into it's [own repo](https://github.com/sujee/llm-quick-bench)
+
+### 📊 Nebius Token Factory Model Visualizer
+
+[model-visualizer/README.md](/providers/nebius-token-factory/model-visualizer/README.md)
+
+Visually explore models available on Token Factory via  intelligence, pricing, release timelines, and context-window trends.  
+[Explore models →](https://sujee.github.io/practical-llm-evals/providers/nebius-token-factory/model-visualizer/)  (ready to use, no API key needed)
 
 ## Developer utilities
 
