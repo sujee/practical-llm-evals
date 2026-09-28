@@ -1299,6 +1299,65 @@
   },
   {
     "type": "text2text",
+    "name": "Qwen3.8-27B",
+    "created_at": 1788458731,
+    "status": "active",
+    "huggingface_url": "https://huggingface.co/Qwen/Qwen3.8-27B",
+    "description": "Qwen3.8-27B is Qwen's dense 27B-parameter reasoning model for coding, professional work, research, and long-horizon agentic tasks. This NVFP4 serverless deployment supports tool calling and a native 262K context window.",
+    "vendor": "Qwen",
+    "tags": [],
+    "use_cases": [
+      "dedicated-endpoint",
+      "text",
+      "reasoning",
+      "code",
+      "function_calling",
+      "context_and_rag",
+      "responses_api"
+    ],
+    "license": {
+      "url": "https://huggingface.co/Qwen/Qwen3.8-27B/blob/main/LICENSE",
+      "name": "Apache 2.0 License",
+      "type": ""
+    },
+    "size_b": 0,
+    "quality": 0,
+    "flavors": [
+      {
+        "model_id": "Qwen/Qwen3.8-27B",
+        "model_type": "text2text",
+        "model_name": "Qwen3.8-27B",
+        "model_description": "Qwen3.8-27B is Qwen's dense 27B-parameter reasoning model for coding, professional work, research, and long-horizon agentic tasks. This NVFP4 serverless deployment supports tool calling and a native 262K context window.",
+        "label": "cheap",
+        "regions": [
+          {
+            "country_code": "US",
+            "name": "us-central1"
+          }
+        ],
+        "external_provider": false,
+        "tags": [],
+        "use_cases": [
+          "dedicated-endpoint",
+          "text",
+          "reasoning",
+          "code",
+          "function_calling",
+          "context_and_rag",
+          "responses_api"
+        ],
+        "context_window_k": 262,
+        "max_model_len": 262144,
+        "tokens_per_second": 218,
+        "input_price_per_million_tokens": 0.45,
+        "output_price_per_million_tokens": 3,
+        "quantization": "fp4"
+      }
+    ],
+    "context_window_k": 262
+  },
+  {
+    "type": "text2text",
     "name": "GLM-5.1",
     "created_at": "2026-04-07T00:00:00.000Z",
     "status": "active",
