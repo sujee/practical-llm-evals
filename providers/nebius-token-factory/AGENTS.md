@@ -21,6 +21,27 @@ The user-facing version of this same workflow is in `model-visualizer/README.md`
 ## Git discipline
 
 Never commit or push automatically. Always ask for explicit approval before each commit and before each push.
+The user saying **"publish"** counts as that approval for the commit/merge/push sequence below.
+
+### "Publish" means: merge to `main` via the worktree, then push to origin
+
+`main` is checked out in a sibling worktree of the repo root, so `git checkout main` fails inside this
+worktree. Do the merge from the `main` worktree instead, preferring a fast-forward, then push both branches:
+
+```bash
+MAIN="$(git rev-parse --show-toplevel)/../main"
+
+git -C "$MAIN" status --short              # must be empty before proceeding
+git -C "$MAIN" pull --ff-only origin main
+git -C "$MAIN" merge --ff-only <current-branch>
+git -C "$MAIN" push origin main
+git push origin <current-branch>           # keep the remote feature branch in sync too
+```
+
+Notes:
+- If `--ff-only` merge fails because `main` diverged, ask the user how to proceed rather than creating a merge commit on your own.
+- Use `git -C "$MAIN" ...` for every step; never `cd` away from the working directory.
+- If the `main` worktree is dirty or out of sync with `origin/main` in a way `--ff-only` can't fix, stop and ask.
 
 ## 1. Refresh the Token Factory catalog
 
