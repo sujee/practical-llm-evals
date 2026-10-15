@@ -12,7 +12,7 @@ and **Responses** APIs, plus a streaming throughput test.
 
 ## Setup
 
-This is a [uv](https://docs.astral.sh/uv/) project.
+This is a [uv](https://docs.astral.sh/uv/) project. Install uv first: `brew install uv`, or `curl -LsSf https://astral.sh/uv/install.sh | sh`.
 
 ```bash
 cp env_sample.txt .env   # then set NEBIUS_API_KEY=your_api_key_here

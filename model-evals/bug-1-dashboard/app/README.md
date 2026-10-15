@@ -1,13 +1,12 @@
 # Acme Revenue Dashboard
 
-A deliberately small but realistic revenue dashboard for an agentic debugging demo.
-
+A small, realistic revenue dashboard for a demo of agentic debugging.
 
 ## Business rule
 
-Revenue is recognized only for transactions whose status is `completed`.
+The dashboard counts revenue only for transactions with the status `completed`.
 
-Transactions with statuses such as `refunded`, `failed`, or `pending` must not contribute to the revenue total.
+Transactions with a status such as `refunded`, `failed`, or `pending` must not add to the revenue total.
 
 ## Run
 

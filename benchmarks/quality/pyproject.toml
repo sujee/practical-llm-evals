@@ -1,0 +1,19 @@
+[project]
+name = "llm-endpoint-quality"
+version = "0.1.0"
+description = "Quality tests for OpenAI-compatible endpoints. Uses lm-evaluation-harness and IFBench."
+requires-python = ">=3.11"
+dependencies = [
+    "lm_eval[api]",
+    # Dependencies of IFBench scoring. IFBench is not on PyPI. The script setup_ifbench.sh clones it.
+    "absl-py",
+    "langdetect",
+    "nltk",
+    "immutabledict",
+    "emoji",
+    "syllapy>=0.8.0",
+    "httpx",
+    "tqdm",
+    "pydantic>=2",
+    "pydantic-settings",
+]

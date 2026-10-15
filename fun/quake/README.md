@@ -1,10 +1,10 @@
 # Quake Game
 
-Ask LLM to create a browser playable version of the classic Quake game!
+Ask an LLM to make a version of the classic Quake game that you can play in a browser.
 
 ## Prompt
 
-I kept the prompt very simple
+The prompt is short.
 
 ```
 create the game of 'quake'
@@ -17,19 +17,18 @@ do you need any clarifications?
 
 ## Coding stack
 
-I used various coding agents + models
+I used different coding agents and models.
 
 Coding agents:
 - Claude Code
 - OpenCode
 
-## Game  1: OpenCode + Kimi K3
+## Game 1: OpenCode + Kimi K3
 
-Here is a really cool playable version created by Kimi K3
+Kimi K3 made this playable version.
 
 [Play live!](https://sujee.github.io/practical-llm-evals/fun/quake/opencode-kimi-k3/index.html)
 
 <a href="https://sujee.github.io/practical-llm-evals/fun/quake/opencode-kimi-k3/index.html"><img src="./opencode-kimi-k3/images/quake-1.png" alt="Play" width="200"></a>
 
 ▶️ [Watch on YouTube](https://www.youtube.com/watch?v=6IzVFtnOm9A)
-

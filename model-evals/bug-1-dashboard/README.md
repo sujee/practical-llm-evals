@@ -1,18 +1,18 @@
 # Acme Revenue Dashboard For Testing Agents
 
-A deliberately small but realistic revenue dashboard for an agentic debugging demo.
+A small, realistic revenue dashboard. It contains a planted bug for a demo of agentic debugging.
 
 ## How to run the app
 
-Follow [app/README.md](app/README.md)
+Follow [app/README.md](app/README.md).
 
 ## The Bug
 
-In [BUG_REPORT.md](BUG_REPORT.md)
+The bug report is in [BUG_REPORT.md](BUG_REPORT.md).
 
-Customer Success reported that the **Revenue** card does not match the total of the completed transactions shown in the table.
+Customer Success reported that the **Revenue** card does not match the total of the completed transactions in the table.
 
-For the currently seeded data the dashboard currently shows:
+With the seeded data, the dashboard shows:
 
 - Revenue summary: **$120,000**
 - Completed transaction table total: **$100,000**
@@ -20,17 +20,17 @@ For the currently seeded data the dashboard currently shows:
 
 ## Business rule
 
-Revenue is recognized only for transactions whose status is `completed`.
+The dashboard counts revenue only for transactions with the status `completed`.
 
-Transactions with statuses such as `refunded`, `failed`, or `pending` must not contribute to either the revenue total or revenue transaction count.
+Transactions with a status such as `refunded`, `failed`, or `pending` must not add to the revenue total or to the revenue transaction count.
 
 ## Demo
 
-Start the coding agent in **app** directory.  So the agent doesn't have access to this directory with bug reports.
+Start the coding agent in the **app** folder. Then the agent cannot read the bug reports in this folder.
 
-### Prompt 1 (for models that can read image)
+### Prompt 1 (for models that can read images)
 
-Paste image : bug-report.png
+Paste the image `bug-report.png`.
 
 ```
 See the dashboard image for the reported bug.
@@ -40,7 +40,7 @@ Investigate the issue in this repository. Reproduce it, identify the root cause,
 Do not modify the seed data just to make the totals agree.
 ```
 
-### Prompt 2 (for text only models)
+### Prompt 2 (for text-only models)
 
 ```
 Revenue card says $120,000
@@ -51,9 +51,8 @@ Investigate the issue in this repository. Reproduce it, identify the root cause,
 Do not modify the seed data just to make the totals agree.
 ```
 
-## Verify the fix
+## Check the fix
 
-Restart the app and check the summary.  
-It should be $100,000
+Restart the app and check the summary. It must show $100,000.
 
-Also do `git status` and `git diff`  to see new  tests added.
+Run `git status` and `git diff` to see the new tests.

@@ -1,0 +1,8 @@
+[project]
+name = "llm-endpoint-perf"
+version = "0.1.0"
+description = "Speed (TTFT, tokens/sec) and load (1, 10, 50 clients) tests for OpenAI-compatible endpoints. Uses AIPerf."
+requires-python = ">=3.11"
+dependencies = [
+    "aiperf",
+]

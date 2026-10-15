@@ -1,5 +1,5 @@
 # Quick LLM Bench
 
-A quick and easy browser-based tool for benchmarking LLM inference endpoints. No spinning up VMs, setting up Python environments, or installing packages.
+A quick browser tool to benchmark LLM inference endpoints. It needs no VM, no Python environment, and no packages.
 
-🎓 LLM Quick Bench has graduated into it's [own repo](https://github.com/sujee/llm-quick-bench)
+🎓 LLM Quick Bench now has its [own repo](https://github.com/sujee/llm-quick-bench).
