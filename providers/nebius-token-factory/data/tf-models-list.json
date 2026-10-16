@@ -202,7 +202,7 @@
   {
     "type": "text2text",
     "name": "DeepSeek-V4-Pro-0813",
-    "created_at": 1789013558,
+    "created_at": 1791525427,
     "status": "active",
     "huggingface_url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro-0813",
     "description": "DeepSeek V4 Pro 0813 is DeepSeek's official V4 Pro release for advanced reasoning, coding, tool use, and long-horizon agentic workflows.",
@@ -233,8 +233,8 @@
         "label": "cheap",
         "regions": [
           {
-            "country_code": "US",
-            "name": "us-north1"
+            "country_code": "UK",
+            "name": "uk-south1"
           }
         ],
         "external_provider": false,
@@ -315,6 +315,67 @@
       }
     ],
     "context_window_k": 110
+  },
+  {
+    "type": "image2text",
+    "name": "Muse Spark Open",
+    "created_at": 1791523446,
+    "status": "active",
+    "huggingface_url": "https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B-NVFP4",
+    "description": "Meta’s 816B-parameter mixture-of-experts model for coding and agentic workflows, with about 42B active parameters, image and video input, reasoning and tool use.",
+    "vendor": "meta",
+    "tags": [],
+    "use_cases": [
+      "dedicated-endpoint",
+      "text",
+      "image",
+      "video",
+      "code",
+      "reasoning",
+      "function_calling",
+      "responses_api"
+    ],
+    "license": {
+      "url": "https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B/blob/main/LICENSE.md",
+      "name": "Muse Model License",
+      "type": ""
+    },
+    "size_b": 0,
+    "quality": 0,
+    "flavors": [
+      {
+        "model_id": "meta-models/muse-spark-open",
+        "model_type": "image2text",
+        "model_name": "Muse Spark Open",
+        "model_description": "Meta’s 816B-parameter mixture-of-experts model for coding and agentic workflows, with about 42B active parameters, image and video input, reasoning and tool use.",
+        "label": "cheap",
+        "regions": [
+          {
+            "country_code": "US",
+            "name": "us-north1"
+          }
+        ],
+        "external_provider": false,
+        "tags": [],
+        "use_cases": [
+          "dedicated-endpoint",
+          "text",
+          "image",
+          "video",
+          "code",
+          "reasoning",
+          "function_calling",
+          "responses_api"
+        ],
+        "context_window_k": 1048,
+        "max_model_len": 1048576,
+        "tokens_per_second": 143,
+        "input_price_per_million_tokens": 1.25,
+        "output_price_per_million_tokens": 4.25,
+        "quantization": "fp4"
+      }
+    ],
+    "context_window_k": 1048
   },
   {
     "type": "text2text",
@@ -640,6 +701,71 @@
       }
     ],
     "context_window_k": 128
+  },
+  {
+    "type": "image2text",
+    "name": "Nemotron 3.5 Super VL",
+    "created_at": 1791841710,
+    "status": "active",
+    "description": "NVIDIA's multimodal model for visual understanding, coding, reasoning, and tool use. It processes text, images, and video to generate text responses.",
+    "vendor": "nvidia",
+    "tags": [],
+    "use_cases": [
+      "dedicated-endpoint",
+      "text",
+      "image",
+      "video",
+      "code",
+      "function_calling",
+      "reasoning",
+      "responses_api",
+      "context_and_rag",
+      "image2text"
+    ],
+    "policy_url": "https://openmdw.ai/license/1-1/",
+    "license": {
+      "url": "https://openmdw.ai/license/1-1/",
+      "name": "OpenMDW-1.1",
+      "type": ""
+    },
+    "size_b": 0,
+    "quality": 0,
+    "flavors": [
+      {
+        "model_id": "nvidia/Nemotron-3.5-Super-VL",
+        "model_type": "image2text",
+        "model_name": "Nemotron 3.5 Super VL",
+        "model_description": "NVIDIA's multimodal model for visual understanding, coding, reasoning, and tool use. It processes text, images, and video to generate text responses.",
+        "label": "cheap",
+        "regions": [
+          {
+            "country_code": "US",
+            "name": "us-north1"
+          }
+        ],
+        "external_provider": false,
+        "tags": [],
+        "use_cases": [
+          "dedicated-endpoint",
+          "text",
+          "image",
+          "video",
+          "code",
+          "function_calling",
+          "reasoning",
+          "responses_api",
+          "context_and_rag",
+          "image2text"
+        ],
+        "context_window_k": 1024,
+        "max_model_len": 1048576,
+        "tokens_per_second": 282.4,
+        "input_price_per_million_tokens": 0.3,
+        "output_price_per_million_tokens": 0.9,
+        "quantization": "bf16"
+      }
+    ],
+    "context_window_k": 1024
   },
   {
     "type": "text2text",
@@ -1298,7 +1424,7 @@
     "context_window_k": 262
   },
   {
-    "type": "text2text",
+    "type": "image2text",
     "name": "Qwen3.8-27B",
     "created_at": 1788458731,
     "status": "active",
@@ -1309,6 +1435,7 @@
     "use_cases": [
       "dedicated-endpoint",
       "text",
+      "image",
       "reasoning",
       "code",
       "function_calling",
@@ -1325,7 +1452,7 @@
     "flavors": [
       {
         "model_id": "Qwen/Qwen3.8-27B",
-        "model_type": "text2text",
+        "model_type": "image2text",
         "model_name": "Qwen3.8-27B",
         "model_description": "Qwen3.8-27B is Qwen's dense 27B-parameter reasoning model for coding, professional work, research, and long-horizon agentic tasks. This NVFP4 serverless deployment supports tool calling and a native 262K context window.",
         "label": "cheap",
@@ -1340,6 +1467,7 @@
         "use_cases": [
           "dedicated-endpoint",
           "text",
+          "image",
           "reasoning",
           "code",
           "function_calling",
@@ -1355,6 +1483,63 @@
       }
     ],
     "context_window_k": 262
+  },
+  {
+    "type": "text2text",
+    "name": "Reflection Beam 1.0",
+    "created_at": 1792155600,
+    "status": "active",
+    "huggingface_url": "https://huggingface.co/reflection/Beam-1.0-501B-A23B",
+    "description": "Beam is Reflection’s open-weight, instruction-tuned text model for coding, reasoning and agentic tool use. Its mixture-of-experts architecture has 501.3B total parameters and 23.4B active parameters. It supports a 1M-token context window, was developed predominantly for English, and has a knowledge cutoff of June 30, 2026.",
+    "vendor": "reflection",
+    "tags": [],
+    "use_cases": [
+      "dedicated-endpoint",
+      "text",
+      "code",
+      "function_calling",
+      "reasoning",
+      "responses_api"
+    ],
+    "license": {
+      "url": "https://www.apache.org/licenses/LICENSE-2.0",
+      "name": "Apache 2.0",
+      "type": ""
+    },
+    "size_b": 0,
+    "quality": 0,
+    "flavors": [
+      {
+        "model_id": "reflection/beam",
+        "model_type": "text2text",
+        "model_name": "Reflection Beam 1.0",
+        "model_description": "Beam is Reflection’s open-weight, instruction-tuned text model for coding, reasoning and agentic tool use. Its mixture-of-experts architecture has 501.3B total parameters and 23.4B active parameters. It supports a 1M-token context window, was developed predominantly for English, and has a knowledge cutoff of June 30, 2026.",
+        "label": "cheap",
+        "regions": [
+          {
+            "country_code": "US",
+            "name": "us-north1"
+          }
+        ],
+        "external_provider": false,
+        "tags": [],
+        "use_cases": [
+          "dedicated-endpoint",
+          "text",
+          "code",
+          "function_calling",
+          "reasoning",
+          "responses_api"
+        ],
+        "context_window_k": 1048,
+        "max_model_len": 1048576,
+        "tokens_per_second": 389,
+        "input_price_per_million_tokens": 0.25,
+        "output_price_per_million_tokens": 1,
+        "quantization": "fp8"
+      }
+    ],
+    "context_window_k": 1048
   },
   {
     "type": "text2text",
